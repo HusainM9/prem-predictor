@@ -37,7 +37,7 @@ export default function Home() {
           </button>
 
           <div style={{ marginTop: 20 }}>
-            <Link href="/leagues">Go to leagues</Link>
+            <Link href="/play">Make your predictions</Link>
           </div>
         </>
       ) : (
