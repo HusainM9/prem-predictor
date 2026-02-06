@@ -61,24 +61,26 @@ export async function POST(req: Request) {
 
     // Upsert prediction (locked_odds stays null until lock-odds snapshots it)
     const { error: insErr } = await supabase
-      .from("predictions")
-      .upsert(
-        {
-          user_id: userId,
-          fixture_id: fixtureId,
-          mode,
-          league_id: leagueId,
-          pick,
-          stake: 10,
-          locked_odds: null,
-          pred_home_goals: hasScore ? predHomeGoals : null,
-          pred_away_goals: hasScore ? predAwayGoals : null,
-          submitted_at: new Date().toISOString(),
-        },
-        { onConflict: "fixture_id,user_id,mode" }
-      );
+    .from("predictions")
+    .upsert(
+      {
+        user_id: userId,
+        fixture_id: fixtureId,
+        mode,
+        league_id: leagueId,
+        pick,
+        stake: 10,
+        pred_home_goals: hasScore ? predHomeGoals : null,
+        pred_away_goals: hasScore ? predAwayGoals : null,
+        submitted_at: new Date().toISOString(),
+      },
+      { onConflict: "fixture_id,user_id,mode" }
+    );
+  
 
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
+
+    
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

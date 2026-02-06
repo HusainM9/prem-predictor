@@ -239,7 +239,7 @@ export default function PlayPage() {
                   {pick[f.id] && oddsH && oddsD && oddsA && (
                     <small style={{ opacity: 0.7 }}>
                       Potential points if correct:{" "}
-                      {10 * (pick[f.id] === "H" ? oddsH : pick[f.id] === "D" ? oddsD : oddsA)}
+                      {Math.round(10 * (pick[f.id] === "H" ? oddsH : pick[f.id] === "D" ? oddsD : oddsA))}
                     </small>
                   )}
 
