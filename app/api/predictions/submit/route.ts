@@ -58,6 +58,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Score must match Draw pick" }, { status: 400 });
       }
     }
+    
 
     // Upsert prediction (locked_odds stays null until lock-odds snapshots it)
     const { error: insErr } = await supabase

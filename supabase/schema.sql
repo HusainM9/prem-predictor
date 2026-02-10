@@ -33,7 +33,19 @@ create table if not exists public.fixtures (
   status text not null default 'scheduled' check (status in ('scheduled','finished')),
   home_goals int,
   away_goals int,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Odds (The Odds API): mapping + current live + locked
+  odds_api_event_id text,
+  odds_home numeric,
+  odds_draw numeric,
+  odds_away numeric,
+  odds_locked_at timestamptz,
+  odds_bookmaker text,
+  odds_home_current numeric,
+  odds_draw_current numeric,
+  odds_away_current numeric,
+  odds_current_updated_at timestamptz,
+  odds_current_bookmaker text
 );
 
 create index if not exists idx_fixtures_gw on public.fixtures(season, gameweek);

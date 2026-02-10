@@ -47,8 +47,9 @@ export async function GET(req: Request) {
     const nowParam = searchParams.get("now");
     const now = nowParam ? new Date(nowParam) : new Date();
 
-    const lockFrom = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const lockTo = new Date(lockFrom.getTime() + 30 * 60 * 1000); // 30 min window
+    // Lock odds for any fixture that kicks off in the next 24 hours (so we're "within 24h of kickoff")
+    const lockFrom = new Date(now.getTime() + 60 * 1000); // 1 min from now to avoid races
+    const lockTo = new Date(now.getTime() + 24 * 60 * 60 * 1000); // up to 24h from now
 
     const { data: fixtures, error } = await supabase
       .from("fixtures")
@@ -68,7 +69,7 @@ export async function GET(req: Request) {
         fixtures_considered: 0,
         odds_locked: 0,
         predictions_snapshotted: 0,
-        note: "No fixtures in the 24h lock window.",
+        note: "No fixtures kicking off in the next 24h.",
         window: { lockFrom: lockFrom.toISOString(), lockTo: lockTo.toISOString() },
       });
     }
