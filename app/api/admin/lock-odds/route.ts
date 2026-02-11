@@ -46,7 +46,7 @@ export async function GET(req: Request) {
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Optional: ?now=ISO overrides "current" time so we can test the 24h lock window without waiting.
+    // Test the 24h lock window without waiting.
     const { searchParams } = new URL(req.url);
     const nowParam = searchParams.get("now");
     const now = nowParam ? new Date(nowParam) : new Date();

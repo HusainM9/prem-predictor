@@ -74,7 +74,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Score must match result (home win / draw / away win)" }, { status: 400 });
     }
     
-
     const userId = user.id;
 
     const { error: insErr } = await supabase

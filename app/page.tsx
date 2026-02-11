@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 
-/** Home: anyone can browse Play, Matches, Leaderboard, Table; submit and History require login. */
+/** Home: anyone can browse Play, Matches, Leaderboard, Table. Submit and History require login. */
 export default function Home() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
 

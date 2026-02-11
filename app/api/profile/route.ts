@@ -25,8 +25,8 @@ export async function PATCH(req: Request) {
     if (display_name === null || display_name.length === 0) {
       return NextResponse.json({ error: "display_name is required and must be non-empty" }, { status: 400 });
     }
-    if (display_name.length > 64) {
-      return NextResponse.json({ error: "display_name must be at most 64 characters" }, { status: 400 });
+    if (display_name.length > 16) {
+      return NextResponse.json({ error: "display_name must be at most 16 characters" }, { status: 400 });
     }
 
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

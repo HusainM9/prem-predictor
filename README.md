@@ -29,7 +29,7 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-OOdds are refreshed automatically in the background.  
+Odds are refreshed automatically in the background.  
 This links fixtures, updates prices, and locks odds before kick-off.
 
 Can be triggered manually via `/api/cron/odds` if needed.

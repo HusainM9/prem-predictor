@@ -1,5 +1,5 @@
 /**
- * In-memory rate limiter (per key). Use for single-instance/serverless; not shared across workers.
+ * In-memory rate limiter (per key). Use for single-instance/serverless. Not shared across workers.
  * Sliding window: max `limit` requests per `windowMs` per key.
  */
 const store = new Map<string, number[]>();

@@ -3,8 +3,7 @@ import { requireAdmin } from "@/lib/admin/requireAdmin";
 import { syncResultsFromFootballData } from "@/lib/sync-results";
 
 /**
- * GET ?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD (optional)
- * Admin-only. Syncs fixture results (status, goals) from Football-Data.org. Does not settle predictions.
+ * Syncs scores from Football-Data.org into our fixtures.
  */
 export async function GET(req: Request) {
   const unauthorized = requireAdmin(req);
@@ -23,7 +22,7 @@ export async function GET(req: Request) {
     const dateFrom = searchParams.get("dateFrom") ?? threeDaysAgo;
     const dateTo = searchParams.get("dateTo") ?? tomorrow;
 
-    // --- Calls shared sync logic (used by cron and by this admin route) ---
+    // Calls shared sync logic 
     const result = await syncResultsFromFootballData({
       dateFrom,
       dateTo,

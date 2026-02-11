@@ -24,20 +24,20 @@ type FixtureRow = {
   odds_current_bookmaker: string | null;
 };
 
-/** Play page: list upcoming fixtures for current gameweek, pre-fill existing predictions, save new/updated predictions. */
+/**  List upcoming fixtures for current gameweek, pre-fill existing predictions, save new/updated predictions. */
 export default function PlayPage() {
   const [fixtures, setFixtures] = useState<FixtureRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  // Per-fixture form state: home/away goal inputs, saving flag, status message
+  // Home/away goal inputs, saving flag, status message
   const [homeGoals, setHomeGoals] = useState<Record<string, string>>({});
   const [awayGoals, setAwayGoals] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [msg, setMsg] = useState<Record<string, string>>({});
   const [gw, setGw] = useState<number | null>(null);
 
-  /** Convert predicted score to outcome: H = home win, A = away win, D = draw. */
+  /** Convert predicted score to outcome. H = home win, A = away win, D = draw. */
   function derivedPick(hg: number, ag: number): Pick | null {
     if (hg > ag) return "H";
     if (ag > hg) return "A";
@@ -51,7 +51,7 @@ export default function PlayPage() {
 
       const nowIso = new Date().toISOString();
 
-      // --- Find the next gameweek: first scheduled fixture in the future ---
+      // Find the next gameweek
       const { data: gwRow, error: gwErr } = await supabase
         .from("fixtures")
         .select("gameweek,kickoff_time")
@@ -72,7 +72,7 @@ export default function PlayPage() {
       const currentGw = gwRow?.gameweek ?? 1;
       setGw(currentGw);
 
-      // --- Load all fixtures for that gameweek (upcoming only), including odds ---
+      // Load all fixtures for ucoming gameweek with odds 
       const { data: fx, error: fxErr } = await supabase
         .from("fixtures")
         .select("id,kickoff_time,home_team,away_team,status,gameweek,odds_home,odds_draw,odds_away,odds_locked_at,odds_home_current,odds_draw_current,odds_away_current,odds_current_updated_at,odds_current_bookmaker")
@@ -91,7 +91,7 @@ export default function PlayPage() {
       const fixtureList = (fx ?? []) as FixtureRow[];
       setFixtures(fixtureList);
 
-      // --- Pre-fill form: call our API with JWT to get this user's predictions for these fixture IDs ---
+      // Load user's existing predictions for these fixtures to pre-fill the form
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token && fixtureList.length > 0) {
         const fixtureIds = fixtureList.map((f) => f.id).join(",");
@@ -124,7 +124,6 @@ export default function PlayPage() {
     load();
   }, []);
 
-  /** Validate home/away inputs for one fixture; return error string or null if valid. */
   function validate(fixtureId: string) {
     const hgStr = homeGoals[fixtureId];
     const agStr = awayGoals[fixtureId];
@@ -213,7 +212,7 @@ export default function PlayPage() {
           {fixtures.map((f) => {
           const locked = !!f.odds_locked_at;
 
-          // --- Show locked odds once set; otherwise show "current" live odds if we have them ---
+          // Show locked odds once set. Otherwise show "current" live odds 
           const oddsSource = locked
             ? "locked"
             : (f.odds_home_current != null && f.odds_draw_current != null && f.odds_away_current != null)

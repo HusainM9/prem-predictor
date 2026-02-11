@@ -24,7 +24,7 @@ export async function GET(req: Request) {
     const gameweek =
       gameweekNum != null && Number.isInteger(gameweekNum) && gameweekNum >= 1 ? gameweekNum : undefined;
 
-    // --- Only settled predictions have points; sum points_awarded + bonus_exact_score_points ---
+    // Only settled predictions have points. sum points_awarded + bonus_exact_score_points 
     let query = supabase
       .from("predictions")
       .select("user_id, points_awarded, bonus_exact_score_points, fixture_id")

@@ -6,7 +6,6 @@ import { syncResultsFromFootballData } from "@/lib/sync-results";
  * Call from cron every 15–60 min so /matches shows live scores.
  */
 export async function GET(req: Request) {
-  // --- Require CRON_SECRET so only Vercel Cron (or manual with secret) can trigger this ---
   const authHeader = req.headers.get("authorization");
   const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
   const querySecret = new URL(req.url).searchParams.get("secret");
@@ -29,13 +28,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "SUPABASE_SERVICE_ROLE_KEY is not set" }, { status: 500 });
   }
 
-  // --- Sync window: 3 days ago through tomorrow (covers recent and today's matches) ---
+  // --- Sync window: 3 days ago through tomorrow ---
   const now = new Date();
   const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   try {
-    // --- Fetches Football-Data.org PL matches and updates our fixtures (status, goals) ---
+    // --- Fetches Football-Data.org PL matches and updates fixtures ---
     const result = await syncResultsFromFootballData({
       dateFrom: threeDaysAgo,
       dateTo: tomorrow,

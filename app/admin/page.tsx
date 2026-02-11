@@ -222,12 +222,28 @@ export default function AdminPage() {
     );
   }
 
+  async function handleLogout() {
+    await fetch("/api/admin/logout", fetchOpts("POST"));
+    setAuthed(false);
+  }
+
   return (
     <main style={{ padding: 24, maxWidth: 720, margin: "0 auto" }}>
-      <h1 style={{ fontSize: 24, marginBottom: 8 }}>Admin</h1>
-      <p style={{ opacity: 0.75, marginBottom: 20, fontSize: 14 }}>
-        Run jobs manually. Routes require ADMIN_SECRET (cookie or header).
-      </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
+        <div>
+          <h1 style={{ fontSize: 24, marginBottom: 4 }}>Admin</h1>
+          <p style={{ opacity: 0.75, fontSize: 14 }}>
+            Run jobs manually. Session expires in 1 hour; log out to require the secret again.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleLogout}
+          style={{ ...btnStyle, background: "rgba(255,255,255,0.08)", padding: "8px 14px", fontSize: 14 }}
+        >
+          Log out
+        </button>
+      </div>
 
       <section style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 10 }}>Set / update result</h2>

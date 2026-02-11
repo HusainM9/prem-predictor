@@ -48,6 +48,24 @@ describe("scorePrediction", () => {
     expect(result.points_awarded).toBe(10); // 10*2 - 10
     expect(result.bonus_exact_score_points).toBe(15); // round(1.5 * 10)
   });
+
+  it("uses fallbackOdds when locked_odds is null (e.g. last snapshot of current odds)", () => {
+    const result = scorePrediction(
+      { pick: "H", stake: 10, locked_odds: null, pred_home_goals: 2, pred_away_goals: 1 },
+      { home_goals: 3, away_goals: 0 },
+      { fallbackOdds: 2.2 }
+    );
+    expect(result.points_awarded).toBe(12); // 10*2.2 - 10
+    expect(result.bonus_exact_score_points).toBe(0);
+  });
+
+  it("treats pick 'Home' as correct when actual result is home win", () => {
+    const result = scorePrediction(
+      { pick: "Home" as "H" | "D" | "A", stake: 10, locked_odds: 2.0, pred_home_goals: 1, pred_away_goals: 0 },
+      { home_goals: 1, away_goals: 0 }
+    );
+    expect(result.points_awarded).toBe(10); // 10*2 - 10
+  });
 });
 
 describe("potentialPoints", () => {

@@ -2,7 +2,6 @@ import { createClient } from "@supabase/supabase-js";
 
 const DEFAULT_SEASON = "2025/26";
 
-/** Normalise team name for matching: lowercase, strip FC/AFC, collapse punctuation to spaces. */
 function norm(s: string) {
   return s
     .toLowerCase()
@@ -12,7 +11,6 @@ function norm(s: string) {
     .trim();
 }
 
-/** True if DB and API team names share at least one word (after normalising). */
 function teamMatch(db: string, api: string): boolean {
   const a = norm(db);
   const b = norm(api ?? "");
@@ -39,8 +37,8 @@ export interface SyncResultsResult {
 
 /**
  * Fetches Premier League matches from Football-Data.org for the date range,
- * matches them to our fixtures (by kickoff hour + team names), and updates
- * status and home_goals/away_goals. Does not settle predictions (use score-gameweek for that).
+ * matches them to fixtures (by kickoff hour + team names), and updates
+ * status and home_goals/away_goals. Does not settle predictions .
  */
 export async function syncResultsFromFootballData(options: SyncResultsOptions): Promise<SyncResultsResult> {
   const { dateFrom, dateTo, supabaseUrl, serviceKey, footballDataToken } = options;
@@ -56,7 +54,7 @@ export async function syncResultsFromFootballData(options: SyncResultsOptions): 
   const json = JSON.parse(text);
   const matches = json.matches ?? [];
 
-  // --- Our fixtures in the same date range (same season) ---
+  // Fixtures in the same date range
   const { data: dbFixtures, error: dbErr } = await supabase
     .from("fixtures")
     .select("id, kickoff_time, home_team, away_team")
@@ -69,7 +67,7 @@ export async function syncResultsFromFootballData(options: SyncResultsOptions): 
 
   let updated = 0;
   for (const m of matches) {
-    // --- Match API match to our fixture: same kickoff (to the hour) and team names ---
+    // Match API match to our fixture: same kickoff and team names 
     const apiKick = m.utcDate ? new Date(m.utcDate).toISOString().slice(0, 13) : "";
     const apiHome = m.homeTeam?.name ?? "";
     const apiAway = m.awayTeam?.name ?? "";

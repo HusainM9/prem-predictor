@@ -69,8 +69,17 @@ export async function POST(req: Request) {
     const result = { home_goals: h, away_goals: a };
     let settled = 0;
 
-    // --- Score each prediction and write points_awarded, bonus fields, settled_at ---
+    // Fallback odds: last snapshot of current odds (or locked odds) for the pick when prediction.locked_odds is null
+    const oddsForPick = (pick: string) => {
+      if (pick === "H") return fixture.odds_home_current ?? fixture.odds_home;
+      if (pick === "D") return fixture.odds_draw_current ?? fixture.odds_draw;
+      return fixture.odds_away_current ?? fixture.odds_away;
+    };
+
+    // Score each prediction and write points_awarded, bonus fields, settled_at
     for (const p of predictions ?? []) {
+      const rawFallback = oddsForPick(p.pick);
+      const fallbackOdds = rawFallback != null && Number(rawFallback) > 0 ? Number(rawFallback) : undefined;
       const scored = scorePrediction(
         {
           pick: p.pick as "H" | "D" | "A",
@@ -79,7 +88,8 @@ export async function POST(req: Request) {
           pred_home_goals: p.pred_home_goals,
           pred_away_goals: p.pred_away_goals,
         },
-        result
+        result,
+        { fallbackOdds }
       );
 
       const { error: updErr } = await supabase
