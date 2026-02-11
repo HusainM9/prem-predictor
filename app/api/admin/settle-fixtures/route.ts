@@ -37,7 +37,7 @@ export async function POST(req: Request) {
 
     const { data: fixture, error: fxErr } = await supabase
       .from("fixtures")
-      .select("id, status")
+      .select("id, status, odds_home_current, odds_draw_current, odds_away_current, odds_home, odds_draw, odds_away")
       .eq("id", fixtureId)
       .maybeSingle();
 

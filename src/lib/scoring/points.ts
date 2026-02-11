@@ -1,8 +1,12 @@
 /**
  * Scoring for a single prediction once the fixture result is known.
  * - Correct result (H/D/A): points_awarded = round(stake × locked_odds − stake).
+ * - When locked_odds is missing or invalid, a default of 2.0 is used so correct results always get positive points.
  * - Exact score bonus: 1.5× that amount, only when both result and exact score are correct.
  */
+
+/** Default odds used when locked_odds was never set (e.g. lock-odds job didn't run). Correct result then gets stake × 2 − stake = +10. */
+const DEFAULT_LOCKED_ODDS = 2;
 
 export type Pick = "H" | "D" | "A";
 
@@ -47,7 +51,10 @@ export function scorePrediction(
     prediction.pred_away_goals === result.away_goals;
 
   const stake = prediction.stake ?? 10;
-  const lockedOdds = prediction.locked_odds ?? 0;
+  const lockedOdds =
+    prediction.locked_odds != null && prediction.locked_odds > 0
+      ? prediction.locked_odds
+      : DEFAULT_LOCKED_ODDS;
   const resultPoints = correctResult ? stake * lockedOdds - stake : 0;
   const points_awarded = Math.round(resultPoints);
 
@@ -64,7 +71,7 @@ export function scorePrediction(
 }
 
 /**
- * For display before the match: potential points if correct result, and if exact score too.
+ * Potential points if correct result, and if exact score too.
  * Uses stake=10: result = 10×odds − 10, exact bonus = 1.5× that.
  */
 export function potentialPoints(lockedOdds: number): {

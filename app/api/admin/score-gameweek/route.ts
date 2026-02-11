@@ -48,10 +48,10 @@ export async function POST(req: Request) {
       gameweek = resolved;
     }
 
-    // Load all finished fixtures in this gameweek 
+    // Load all finished fixtures in this gameweek (with odds for fallback when prediction.locked_odds is null)
     const { data: fixtures, error: fxErr } = await supabase
       .from("fixtures")
-      .select("id, home_goals, away_goals")
+      .select("id, home_goals, away_goals, odds_home_current, odds_draw_current, odds_away_current, odds_home, odds_draw, odds_away")
       .eq("season", season)
       .eq("gameweek", gameweek)
       .eq("status", "finished");
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
       const home_goals = fixture.home_goals ?? 0;
       const away_goals = fixture.away_goals ?? 0;
 
-      // --- Unsettled predictions for this fixture ---
+      // Unsettled predictions for this fixture
       const { data: predictions, error: predErr } = await supabase
         .from("predictions")
         .select("id, pick, stake, locked_odds, pred_home_goals, pred_away_goals")

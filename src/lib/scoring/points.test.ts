@@ -40,13 +40,13 @@ describe("scorePrediction", () => {
     expect(result.bonus_points).toBe(23);
   });
 
-  it("uses stake 10 when locked_odds is null for correct result", () => {
+  it("awards positive points when locked_odds is null for correct result (default odds 2)", () => {
     const result = scorePrediction(
       { pick: "H", stake: 10, locked_odds: null, pred_home_goals: 1, pred_away_goals: 0 },
       { home_goals: 1, away_goals: 0 }
     );
-    expect(result.points_awarded).toBe(-10); // 10*0 - 10
-    expect(result.bonus_exact_score_points).toBe(-15); // round(1.5 * -10)
+    expect(result.points_awarded).toBe(10); // 10*2 - 10
+    expect(result.bonus_exact_score_points).toBe(15); // round(1.5 * 10)
   });
 });
 
