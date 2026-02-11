@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/odds",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-results",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

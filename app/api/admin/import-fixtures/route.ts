@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAdmin } from "@/lib/admin/requireAdmin";
 
 function isoDate(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
 export async function GET(req: Request) {
+  const unauthorized = requireAdmin(req);
+  if (unauthorized) return unauthorized;
   try {
     const token = process.env.FOOTBALL_DATA_API_KEY;
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;

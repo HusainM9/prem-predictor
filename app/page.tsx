@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 
+/** Home: anyone can browse Play, Matches, Leaderboard, Table; submit and History require login. */
 export default function Home() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
@@ -30,25 +31,30 @@ export default function Home() {
       <h1>Prem Predictor</h1>
 
       {userEmail ? (
-        <>
-          <p>Logged in as: {userEmail}</p>
-          <button onClick={logout} style={{ padding: 10, marginTop: 10 }}>
+        <p>Logged in</p>
+      ) : (
+        <p>You're not logged in. You can view fixtures and explore; log in to submit predictions.</p>
+      )}
+      <div style={{ display: "flex", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
+        {userEmail ? (
+          <button onClick={logout} style={{ padding: 10 }}>
             Log out
           </button>
-
-          <div style={{ marginTop: 20 }}>
-            <Link href="/play">Make your predictions</Link>
-          </div>
-        </>
-      ) : (
-        <>
-          <p>You’re not logged in.</p>
-          <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
+        ) : (
+          <>
             <Link href="/login">Log in</Link>
             <Link href="/signup">Sign up</Link>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
+
+      <div style={{ marginTop: 20, display: "flex", flexWrap: "wrap", gap: 12 }}>
+        <Link href="/play">Make your predictions</Link>
+        <Link href="/matches">Matches</Link>
+        <Link href="/leaderboard">Leaderboard</Link>
+        <Link href="/history">My history</Link>
+        <Link href="/table">League table</Link>
+      </div>
     </main>
   );
 }

@@ -2,14 +2,26 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-export async function POST() {
+/**
+ * Refreshes current odds for upcoming fixtures. Intended to be called by cron (or admin).
+ * Protected by CRON_SECRET so random users cannot trigger Odds API usage.
+ */
+export async function POST(req: Request) {
+  const authHeader = req.headers.get("authorization");
+  const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const querySecret = new URL(req.url).searchParams.get("secret");
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && bearer !== cronSecret && querySecret !== cronSecret) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // 1) Load fixtures needing odds (must have odds_api_event_id from map-odds)
+    // Fixtures: future kickoff, within 3 days, not locked, and already mapped to Odds API
     const { data: fixtures, error } = await supabase
       .from("fixtures")
       .select("id, odds_api_event_id, home_team, away_team, kickoff_time")
@@ -30,7 +42,7 @@ export async function POST() {
       });
     }
 
-    // 2) Fetch ALL odds ONCE
+    // Fetch all odds one time
     const oddsRes = await fetch(
       `https://api.the-odds-api.com/v4/sports/soccer_epl/odds?regions=uk&markets=h2h&oddsFormat=decimal&apiKey=${process.env.ODDS_API_KEY}`,
       { cache: "no-store" }
@@ -45,7 +57,7 @@ export async function POST() {
     let updated = 0;
 
     for (const fixture of fixtures) {
-      // Match by unique event ID so each fixture gets its own odds (no duplication)
+      // --- Find this fixture's event in the API response by odds_api_event_id ---
       const event = events.find((e: any) => e.id === fixture.odds_api_event_id);
       if (!event) continue;
 
@@ -55,13 +67,13 @@ export async function POST() {
       const h2h = bookmaker.markets?.find((m: any) => m.key === "h2h");
       if (!h2h) continue;
 
-      // Outcomes use event's home_team / away_team names, not DB names
       const h = h2h.outcomes.find((o: any) => o.name === event.home_team);
       const d = h2h.outcomes.find((o: any) => String(o.name).toLowerCase() === "draw");
       const a = h2h.outcomes.find((o: any) => o.name === event.away_team);
 
       if (!h || !d || !a) continue;
 
+      // Store current decimal odds and bookmaker for display before lock 
       await supabase
         .from("fixtures")
         .update({

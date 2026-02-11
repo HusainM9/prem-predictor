@@ -45,7 +45,8 @@ create table if not exists public.fixtures (
   odds_draw_current numeric,
   odds_away_current numeric,
   odds_current_updated_at timestamptz,
-  odds_current_bookmaker text
+  odds_current_bookmaker text,
+  goalscorers text
 );
 
 create index if not exists idx_fixtures_gw on public.fixtures(season, gameweek);

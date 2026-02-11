@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAdmin } from "@/lib/admin/requireAdmin";
 
+// Currently only getting Unibet
 const PREFERRED_BOOKMAKERS = ["bet365", "skybet"];
 
 function pickPreferredBookmaker(bookmakers: any[]) {
@@ -31,6 +33,8 @@ function getH2HOdds(event: any, bookmaker: any) {
 }
 
 export async function GET(req: Request) {
+  const unauthorized = requireAdmin(req);
+  if (unauthorized) return unauthorized;
   try {
     const apiKey = process.env.ODDS_API_KEY;
     const region = process.env.ODDS_API_REGION || "uk";
@@ -42,14 +46,14 @@ export async function GET(req: Request) {
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Optional dev testing: ?now=2026-02-05T20:00:00Z
+    // Optional: ?now=ISO overrides "current" time so we can test the 24h lock window without waiting.
     const { searchParams } = new URL(req.url);
     const nowParam = searchParams.get("now");
     const now = nowParam ? new Date(nowParam) : new Date();
 
-    // Lock odds for any fixture that kicks off in the next 24 hours (so we're "within 24h of kickoff")
-    const lockFrom = new Date(now.getTime() + 60 * 1000); // 1 min from now to avoid races
-    const lockTo = new Date(now.getTime() + 24 * 60 * 60 * 1000); // up to 24h from now
+    // Only lock for fixtures kicking off in the next 24h
+    const lockFrom = new Date(now.getTime() + 60 * 1000);
+    const lockTo = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
     const { data: fixtures, error } = await supabase
       .from("fixtures")
@@ -121,7 +125,7 @@ export async function GET(req: Request) {
 
       if (!oddsToLock) continue;
 
-      // 1) Lock odds on fixture
+      // Lock odds on fixture
       const { error: updErr } = await supabase
         .from("fixtures")
         .update({
@@ -136,7 +140,7 @@ export async function GET(req: Request) {
       if (updErr) continue;
       locked++;
 
-      // 2) Snapshot locked odds onto predictions for this fixture (only if not already set)
+      // Snapshot locked odds onto predictions for this fixture (only if not already set)
       const { data: preds, error: predErr } = await supabase
         .from("predictions")
         .select("id,pick,locked_odds")

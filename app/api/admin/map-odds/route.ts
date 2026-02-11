@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAdmin } from "@/lib/admin/requireAdmin";
 
+// --- Normalise team names for matching (lowercase, strip FC/AFC, collapse punctuation) ---
 function norm(s: string) {
   return s
     .toLowerCase()
@@ -12,6 +14,7 @@ function norm(s: string) {
     .trim();
 }
 
+// --- Map common variants to a canonical name so "Man City" matches "Manchester City" ---
 const ALIASES: Record<string, string> = {
   wolves: "wolverhampton wanderers",
   wolverhampton: "wolverhampton wanderers",
@@ -52,8 +55,11 @@ function teamsMatch(dbHome: string, dbAway: string, apiHome: string, apiAway: st
   return overlap(dht, aht) >= 1 && overlap(dat, aat) >= 1;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const unauthorized = requireAdmin(req);
+  if (unauthorized) return unauthorized;
   try {
+    // --- Load env; we need Odds API key and Supabase service role ---
     const apiKey = process.env.ODDS_API_KEY;
     const region = process.env.ODDS_API_REGION || "uk";
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -64,7 +70,7 @@ export async function GET() {
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // 1) Fetch Odds API EPL events first (these define the date window)
+    // --- Step 1: Fetch all EPL events from Odds API (they define which dates have odds) ---
     const oddsUrl =
       `https://api.the-odds-api.com/v4/sports/soccer_epl/odds` +
       `?regions=${region}&markets=h2h&oddsFormat=decimal&apiKey=${apiKey}`;
@@ -85,7 +91,7 @@ export async function GET() {
       return NextResponse.json({ success: true, mapped_and_saved: 0, note: "No odds events returned." });
     }
 
-    // 2) Compute window as full calendar days covering all events (so DB date format can't miss)
+    // --- Step 2: Build date range from event commence times so we only query DB fixtures in that window ---
     const times = events
       .map((e) => new Date(e.commence_time).getTime())
       .filter((t) => Number.isFinite(t));
@@ -98,7 +104,7 @@ export async function GET() {
     const fromIso = new Date(Date.UTC(minDate.getUTCFullYear(), minDate.getUTCMonth(), minDate.getUTCDate(), 0, 0, 0, 0)).toISOString();
     const toIso = new Date(Date.UTC(maxDate.getUTCFullYear(), maxDate.getUTCMonth(), maxDate.getUTCDate(), 23, 59, 59, 999)).toISOString();
 
-    // 3) Pull DB fixtures in this window that are not mapped yet
+    // --- Step 3: Get our fixtures in that window that don't have odds_api_event_id yet ---
     const { data: dbFixtures, error: dbErr } = await supabase
       .from("fixtures")
       .select("id,kickoff_time,home_team,away_team,odds_api_event_id")
@@ -127,7 +133,7 @@ export async function GET() {
 
       const dbKick = new Date(f.kickoff_time).getTime();
 
-      // 4) Try match by time (+/- 8h) + teams
+      // --- Step 4: Match DB fixture to an API event: kickoff within 8h and team names match ---
       let match = events.find((e: any) => {
         const apiKick = new Date(e.commence_time).getTime();
         const within8h = hoursDiff(apiKick, dbKick) <= 8;
@@ -135,7 +141,7 @@ export async function GET() {
         return within8h && teamsMatch(f.home_team, f.away_team, e.home_team ?? "", e.away_team ?? "");
       });
 
-      // 5) Fallback: teams-only (if times differ)
+      // --- Step 5: Fallback: match by team names only if no time+team match ---
       if (!match) {
         match = events.find((e: any) =>
           teamsMatch(f.home_team, f.away_team, e.home_team ?? "", e.away_team ?? "")
@@ -152,7 +158,7 @@ export async function GET() {
         continue;
       }
 
-      // 6) Prevent mapping the same odds event to multiple fixtures
+      // --- Step 6: Ensure we don't assign the same Odds API event to two different DB fixtures ---
       const { data: existing, error: existErr } = await supabase
         .from("fixtures")
         .select("id")
@@ -162,7 +168,7 @@ export async function GET() {
       if (existErr) continue;
       if (existing && existing.length > 0) continue;
 
-      // 7) Save mapping
+      // --- Step 7: Store the Odds API event id on the fixture (used later by fetch-current and lock-odds) ---
       const { error } = await supabase
         .from("fixtures")
         .update({ odds_api_event_id: match.id })
