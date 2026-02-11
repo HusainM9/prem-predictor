@@ -4,19 +4,35 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
+const DISPLAY_NAME_MAX_LENGTH = 16;
+
 export default function SignupPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const trimmed = displayName.trim();
+    if (!trimmed) {
+      setMsg("Display name is required.");
+      return;
+    }
+    if (trimmed.length > DISPLAY_NAME_MAX_LENGTH) {
+      setMsg(`Display name must be at most ${DISPLAY_NAME_MAX_LENGTH} characters.`);
+      return;
+    }
     setLoading(true);
     setMsg(null);
 
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { display_name: trimmed } },
+    });
 
     setLoading(false);
 
@@ -31,6 +47,20 @@ export default function SignupPage() {
     <main style={{ padding: 40, maxWidth: 420 }}>
       <h1>Sign up</h1>
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 12 }}>
+        <label>
+          Display name
+          <input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            type="text"
+            required
+            minLength={1}
+            maxLength={DISPLAY_NAME_MAX_LENGTH}
+            placeholder="How you'll appear on the leaderboard"
+            style={{ width: "100%", padding: 10, marginTop: 6 }}
+          />
+        </label>
+
         <label>
           Email
           <input
