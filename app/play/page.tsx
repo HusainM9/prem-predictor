@@ -124,14 +124,15 @@ export default function PlayPage() {
     load();
   }, []);
 
+  /** Parse goal input; empty/blank is treated as 0. */
+  function parseGoal(s: string | undefined): number {
+    const t = (s ?? "").trim();
+    return t === "" ? 0 : Number(t);
+  }
+
   function validate(fixtureId: string) {
-    const hgStr = homeGoals[fixtureId];
-    const agStr = awayGoals[fixtureId];
-
-    if ((hgStr ?? "") === "" || (agStr ?? "") === "") return "Enter home and away goals.";
-
-    const hg = Number(hgStr);
-    const ag = Number(agStr);
+    const hg = parseGoal(homeGoals[fixtureId]);
+    const ag = parseGoal(awayGoals[fixtureId]);
 
     if (!Number.isInteger(hg) || hg < 0) return "Home goals must be 0 or more.";
     if (!Number.isInteger(ag) || ag < 0) return "Away goals must be 0 or more.";
@@ -149,21 +150,19 @@ export default function PlayPage() {
       return;
     }
 
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData.user;
-    if (!user) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
       setMsg((m) => ({ ...m, [fixture.id]: "Log in to submit predictions." }));
       return;
     }
 
     setSaving((s) => ({ ...s, [fixture.id]: true }));
 
-    const hg = Number(homeGoals[fixture.id]);
-    const ag = Number(awayGoals[fixture.id]);
+    const hg = parseGoal(homeGoals[fixture.id]);
+    const ag = parseGoal(awayGoals[fixture.id]);
     const p = derivedPick(hg, ag)!;
 
     const payload = {
-      userId: user.id,
       fixtureId: fixture.id,
       pick: p,
       predHomeGoals: hg,
@@ -175,7 +174,10 @@ export default function PlayPage() {
     try {
       const res = await fetch("/api/predictions/submit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify(payload),
       });
 
