@@ -33,7 +33,6 @@ export async function POST(req: Request) {
       pick,
       predHomeGoals,
       predAwayGoals,
-      mode = "global",
       leagueId = null,
     } = body;
 
@@ -44,6 +43,19 @@ export async function POST(req: Request) {
     const hasScore = predHomeGoals !== null && predHomeGoals !== undefined && predAwayGoals !== null && predAwayGoals !== undefined;
     if (!hasScore) {
       return NextResponse.json({ error: "predHomeGoals and predAwayGoals are required" }, { status: 400 });
+    }
+
+    const isLeague = leagueId != null && String(leagueId).trim() !== "";
+    if (isLeague) {
+      const { data: member } = await supabase
+        .from("league_members")
+        .select("user_id")
+        .eq("league_id", leagueId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!member) {
+        return NextResponse.json({ error: "Not a member of this league" }, { status: 403 });
+      }
     }
 
     // Derive pick from score when not provided
@@ -73,25 +85,22 @@ export async function POST(req: Request) {
     if (pickToUse !== derivedPick) {
       return NextResponse.json({ error: "Score must match result (home win / draw / away win)" }, { status: 400 });
     }
-    
+
     const userId = user.id;
+    const row = {
+      user_id: userId,
+      fixture_id: fixtureId,
+      league_id: isLeague ? leagueId : null,
+      pick: pickToUse,
+      stake: 10,
+      pred_home_goals: predHomeGoals,
+      pred_away_goals: predAwayGoals,
+      submitted_at: new Date().toISOString(),
+    };
 
     const { error: insErr } = await supabase
-    .from("predictions")
-    .upsert(
-      {
-        user_id: userId,
-        fixture_id: fixtureId,
-        mode,
-        league_id: leagueId,
-        pick: pickToUse,
-        stake: 10,
-        pred_home_goals: predHomeGoals,
-        pred_away_goals: predAwayGoals,
-        submitted_at: new Date().toISOString(),
-      },
-      { onConflict: "fixture_id,user_id,mode" }
-    );
+      .from("predictions")
+      .upsert(row, { onConflict: "league_id,fixture_id,user_id" });
 
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
 

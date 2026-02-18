@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * GET /api/predictions/for-fixtures?fixtureIds=uuid1,uuid2,...
+ * GET /api/predictions/for-fixtures?fixtureIds=uuid1,uuid2,...&leagueId=uuid (optional)
  * Returns the current user's predictions for the given fixture IDs (for pre-filling the play page).
+ * - leagueId omitted or empty: global predictions (league_id is null).
+ * - leagueId set: predictions for that league only.
  * Requires Authorization: Bearer <access_token>.
  */
 export async function GET(req: Request) {
@@ -24,6 +26,9 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const fixtureIdsParam = searchParams.get("fixtureIds");
+    const leagueIdParam = searchParams.get("leagueId");
+    const leagueId = leagueIdParam != null && String(leagueIdParam).trim() !== "" ? leagueIdParam.trim() : null;
+
     if (!fixtureIdsParam || fixtureIdsParam.trim() === "") {
       return NextResponse.json({ predictions: [] });
     }
@@ -39,12 +44,20 @@ export async function GET(req: Request) {
     }
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // --- Fetch predictions for this user and these fixtures only ---
-    const { data: rows, error } = await supabase
+    // --- Fetch predictions for this user and these fixtures; filter by league (global = null) ---
+    let query = supabase
       .from("predictions")
       .select("fixture_id, pred_home_goals, pred_away_goals")
       .eq("user_id", user.id)
       .in("fixture_id", fixtureIds);
+
+    if (leagueId != null) {
+      query = query.eq("league_id", leagueId);
+    } else {
+      query = query.is("league_id", null);
+    }
+
+    const { data: rows, error } = await query;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

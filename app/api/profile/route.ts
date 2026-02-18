@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { validateDisplayName } from "@/lib/name-validation";
 
 /**
  * PATCH: update current user's display_name. Requires Authorization: Bearer <access_token>.
@@ -21,12 +22,14 @@ export async function PATCH(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const display_name = typeof body.display_name === "string" ? body.display_name.trim() : null;
-    if (display_name === null || display_name.length === 0) {
+    const raw = typeof body.display_name === "string" ? body.display_name : null;
+    const trimmed = raw ? raw.trim() : null;
+    if (trimmed === null || trimmed.length === 0) {
       return NextResponse.json({ error: "display_name is required and must be non-empty" }, { status: 400 });
     }
-    if (display_name.length > 16) {
-      return NextResponse.json({ error: "display_name must be at most 16 characters" }, { status: 400 });
+    const validation = validateDisplayName(trimmed);
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -38,12 +41,12 @@ export async function PATCH(req: Request) {
     const { error } = await supabase
       .from("profiles")
       .upsert(
-        { id: user.id, display_name, updated_at: new Date().toISOString() },
+        { id: user.id, display_name: trimmed, updated_at: new Date().toISOString() },
         { onConflict: "id" }
       );
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ success: true, display_name });
+    return NextResponse.json({ success: true, display_name: trimmed });
   } catch (err: unknown) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
