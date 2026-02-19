@@ -63,28 +63,34 @@ export async function POST(req: Request) {
       predHomeGoals > predAwayGoals ? "H" : predAwayGoals > predHomeGoals ? "A" : "D";
     const pickToUse = pick && (pick === "H" || pick === "D" || pick === "A") ? pick : derivedPick;
 
-    // Load fixture (only for kickoff check)
+    // Load fixture for kickoff and odds (lock odds at prediction time)
     const { data: fixture, error: fxErr } = await supabase
       .from("fixtures")
-      .select("id,kickoff_time,status")
+      .select("id, kickoff_time, status, odds_home, odds_draw, odds_away, odds_home_current, odds_draw_current, odds_away_current")
       .eq("id", fixtureId)
       .maybeSingle();
 
     if (fxErr || !fixture) return NextResponse.json({ error: "Fixture not found" }, { status: 404 });
 
-    // Prevent submitting after kickoff
     const kickoff = new Date(fixture.kickoff_time).getTime();
     if (Date.now() >= kickoff) {
       return NextResponse.json({ error: "Predictions closed (kickoff passed)" }, { status: 400 });
     }
 
-    // --- Score must be non-negative; pick must match the score (no inconsistent H/D/A) ---
     if (predHomeGoals < 0 || predAwayGoals < 0) {
       return NextResponse.json({ error: "Invalid score" }, { status: 400 });
     }
     if (pickToUse !== derivedPick) {
       return NextResponse.json({ error: "Score must match result (home win / draw / away win)" }, { status: 400 });
     }
+
+    const raw =
+      pickToUse === "H"
+        ? fixture.odds_home ?? fixture.odds_home_current
+        : pickToUse === "D"
+          ? fixture.odds_draw ?? fixture.odds_draw_current
+          : fixture.odds_away ?? fixture.odds_away_current;
+    const locked_odds = raw != null && Number(raw) > 0 ? Number(raw) : null;
 
     const userId = user.id;
     const row = {
@@ -93,6 +99,7 @@ export async function POST(req: Request) {
       league_id: isLeague ? leagueId : null,
       pick: pickToUse,
       stake: 10,
+      locked_odds,
       pred_home_goals: predHomeGoals,
       pred_away_goals: predAwayGoals,
       submitted_at: new Date().toISOString(),

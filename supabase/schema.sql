@@ -54,12 +54,18 @@ create index if not exists idx_fixtures_gw on public.fixtures(season, gameweek);
 -- 4) Predictions
 create table if not exists public.predictions (
   id uuid primary key default gen_random_uuid(),
-  league_id uuid not null references public.leagues(id) on delete cascade,
+  league_id uuid references public.leagues(id) on delete cascade,
   fixture_id uuid not null references public.fixtures(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   pred_home_goals int not null check (pred_home_goals >= 0),
   pred_away_goals int not null check (pred_away_goals >= 0),
   submitted_at timestamptz not null default now(),
+  stake numeric not null default 10,
+  locked_odds numeric,
+  settled_at timestamptz,
+  points_awarded numeric,
+  bonus_exact_score_points numeric,
+  bonus_points numeric,
   unique (league_id, fixture_id, user_id)
 );
 
