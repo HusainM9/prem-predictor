@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -10,7 +10,7 @@ import { isReservedLeagueName } from "@/lib/name-validation";
 
 const PAGE_SIZE = 50;
 
-export default function LeaderboardPage() {
+function LeaderboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const leagueIdFromUrl = searchParams.get("leagueId") ?? "";
@@ -67,7 +67,7 @@ export default function LeaderboardPage() {
           setEntries(d.entries ?? []);
           setTotalCount(d.total_count ?? 0);
           if (d.league_name !== undefined) setLeagueName(d.league_name ?? null);
-          // If this league is the "global" one, redirect to /leaderboard so there's one URL and one title
+          // If this league is the "global" one, redirect to /leaderboard
           if (leagueId && isReservedLeagueName(d.league_name)) {
             const next = new URLSearchParams();
             if (effectiveGameweek != null) next.set("gameweek", String(effectiveGameweek));
@@ -188,5 +188,13 @@ export default function LeaderboardPage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function LeaderboardPage() {
+  return (
+    <Suspense fallback={<main style={{ padding: 24, maxWidth: 640, margin: "0 auto" }}><p>Loading…</p></main>}>
+      <LeaderboardContent />
+    </Suspense>
   );
 }
