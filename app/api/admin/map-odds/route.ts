@@ -84,7 +84,13 @@ export async function GET(req: Request) {
       );
     }
 
-    const events = JSON.parse(oddsText) as any[];
+    interface OddsApiEvent {
+      id?: string;
+      commence_time?: string;
+      home_team?: string;
+      away_team?: string;
+    }
+    const events = JSON.parse(oddsText) as OddsApiEvent[];
 
     if (!Array.isArray(events) || events.length === 0) {
       return NextResponse.json({ success: true, mapped_and_saved: 0, note: "No odds events returned." });
@@ -92,7 +98,7 @@ export async function GET(req: Request) {
 
     // Compute window as full calendar days covering all events 
     const times = events
-      .map((e) => new Date(e.commence_time).getTime())
+      .map((e) => new Date(e.commence_time ?? "").getTime())
       .filter((t) => Number.isFinite(t));
 
     const minT = Math.min(...times);
@@ -122,7 +128,7 @@ export async function GET(req: Request) {
 
     let mapped = 0;
     let tried = 0;
-    const debugUnmatched: any[] = [];
+    const debugUnmatched: { db: { kickoff: string; home: string; away: string }; reason: string }[] = [];
 
     // Helper to compute hours diff
     const hoursDiff = (a: number, b: number) => Math.abs(a - b) / (1000 * 60 * 60);
@@ -133,8 +139,8 @@ export async function GET(req: Request) {
       const dbKick = new Date(f.kickoff_time).getTime();
 
       // Match by time (+/- 8h) + teams
-      let match = events.find((e: any) => {
-        const apiKick = new Date(e.commence_time).getTime();
+      let match = events.find((e) => {
+        const apiKick = new Date(e.commence_time ?? 0).getTime();
         const within8h = hoursDiff(apiKick, dbKick) <= 8;
 
         return within8h && teamsMatch(f.home_team, f.away_team, e.home_team ?? "", e.away_team ?? "");
@@ -142,7 +148,7 @@ export async function GET(req: Request) {
 
       // Teams-only (if times differ)
       if (!match) {
-        match = events.find((e: any) =>
+        match = events.find((e) =>
           teamsMatch(f.home_team, f.away_team, e.home_team ?? "", e.away_team ?? "")
         );
       }
@@ -195,7 +201,10 @@ export async function GET(req: Request) {
               ? "All fixtures in window are already mapped (odds_api_event_id is set). Nothing to do."
               : "No team/time match found for unmapped fixtures. Check debugUnmatched.",
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: "Route crashed", message: String(err?.message ?? err) }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { error: "Route crashed", message: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
   }
 }

@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const code = typeof body.code === "string" ? body.code.trim() : "";
     if (!code || code.length !== 6 || !isValidInviteCodeFormat(code)) {
-      return NextResponse.json({ error: "Please enter the 6-character invite code exactly as shown" }, { status: 400 });
+      return NextResponse.json({ error: "Please enter the 6-character invite code" }, { status: 400 });
     }
 
     const { data: league, error: leagueErr } = await supabase

@@ -7,14 +7,10 @@ import {
   type PredictionRow,
 } from "@/lib/leaderboard";
 
-const PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 50;
 
 /**
- * Return users ordered by total points, global predictions only, one prediction applies everywhere.
- * - leagueId when set, only league members are shown (ranked by their global prediction points).
- * - gameweek optional, filter by fixture gameweek.
- * - search: optional, filter by display_name.
+ * Return users ordered by total points, one prediction applies everywhere for now. Filter by  gameweek. Filter by display name.
  */
 export async function GET(req: Request) {
   try {
@@ -40,7 +36,7 @@ export async function GET(req: Request) {
     const search = (searchParams.get("search") ?? "").trim();
 
     // Use only global predictions one prediction applies to global and all leagues
-    let query = supabase
+    const query = supabase
       .from("predictions")
       .select("user_id, points_awarded, bonus_exact_score_points, fixture_id")
       .not("settled_at", "is", null)

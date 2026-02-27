@@ -25,8 +25,7 @@ export async function POST(req: Request) {
     const season = body.season ?? DEFAULT_SEASON;
     const useCurrent = body.gameweek == null || body.gameweek === "current";
 
-    // Resolve gameweek: "current" = gameweek of the most recently finished fixture (by kickoff),
-    // so early-played gameweeks (e.g. GW31 rescheduled) don't override the real current GW.
+    // current = gameweek of the most recently finished fixture
     let gameweek: number;
     if (!useCurrent && Number.isInteger(Number(body.gameweek)) && Number(body.gameweek) >= 1) {
       gameweek = Number(body.gameweek);

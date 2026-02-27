@@ -55,24 +55,42 @@ export async function POST(req: Request) {
       throw new Error("Odds API request failed");
     }
 
-    const events = (await oddsRes.json()) as any[];
+    interface OddsOutcome {
+      name?: string;
+      price?: number;
+    }
+    interface OddsMarket {
+      key?: string;
+      outcomes?: OddsOutcome[];
+    }
+    interface OddsBookmaker {
+      key?: string;
+      title?: string;
+      markets?: OddsMarket[];
+    }
+    interface OddsEvent {
+      id?: string;
+      home_team?: string;
+      away_team?: string;
+      bookmakers?: OddsBookmaker[];
+    }
+    const events = (await oddsRes.json()) as OddsEvent[];
 
     let updated = 0;
 
     for (const fixture of fixtures) {
-      // --- Find this fixture's event in the API response by odds_api_event_id ---
-      const event = events.find((e: any) => e.id === fixture.odds_api_event_id);
+      const event = events.find((e) => e.id === fixture.odds_api_event_id);
       if (!event) continue;
 
       const bookmaker = event.bookmakers?.[0];
       if (!bookmaker) continue;
 
-      const h2h = bookmaker.markets?.find((m: any) => m.key === "h2h");
-      if (!h2h) continue;
+      const h2h = bookmaker.markets?.find((m) => m.key === "h2h");
+      if (!h2h?.outcomes) continue;
 
-      const h = h2h.outcomes.find((o: any) => o.name === event.home_team);
-      const d = h2h.outcomes.find((o: any) => String(o.name).toLowerCase() === "draw");
-      const a = h2h.outcomes.find((o: any) => o.name === event.away_team);
+      const h = h2h.outcomes.find((o) => o.name === event.home_team);
+      const d = h2h.outcomes.find((o) => String(o.name).toLowerCase() === "draw");
+      const a = h2h.outcomes.find((o) => o.name === event.away_team);
 
       if (!h || !d || !a) continue;
 
@@ -96,10 +114,10 @@ export async function POST(req: Request) {
       fixtures_checked: fixtures.length,
       fixtures_updated: updated,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("fetch-current odds error:", err);
     return NextResponse.json(
-      { error: (err as Error).message ?? "Unknown error" },
+      { error: err instanceof Error ? err.message : "Unknown error" },
       { status: 500 }
     );
   }

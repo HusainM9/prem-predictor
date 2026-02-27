@@ -75,7 +75,10 @@ export async function GET(req: Request) {
       dateFrom,
       dateTo,
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: "Route crashed", message: String(err?.message ?? err) }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { error: "Route crashed", message: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
   }
 }

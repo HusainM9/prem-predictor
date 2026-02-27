@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * GET /api/predictions/for-fixtures?fixtureIds=uuid1,uuid2,...&leagueId=uuid (optional)
  * Returns the current user's predictions for the given fixture IDs (for pre-filling the play page).
  * - leagueId omitted or empty: global predictions (league_id is null).
  * - leagueId set: predictions for that league only.
@@ -44,7 +43,7 @@ export async function GET(req: Request) {
     }
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // --- Fetch predictions for this user and these fixtures; filter by league (global = null) ---
+    // Fetch predictions for this user and these fixtures; filter by league 
     let query = supabase
       .from("predictions")
       .select("fixture_id, pred_home_goals, pred_away_goals")

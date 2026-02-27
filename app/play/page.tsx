@@ -35,6 +35,7 @@ export default function PlayPage() {
   const [awayGoals, setAwayGoals] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [msg, setMsg] = useState<Record<string, string>>({});
+  const [alreadySavedFixtureIds, setAlreadySavedFixtureIds] = useState<Set<string>>(new Set());
 
   /** Convert predicted score to outcome. H = home win, A = away win, D = draw. */
   function derivedPick(hg: number, ag: number): Pick | null {
@@ -127,14 +128,17 @@ export default function PlayPage() {
           if (res.ok && Array.isArray(data.predictions)) {
             const home: Record<string, string> = {};
             const away: Record<string, string> = {};
+            const savedIds = new Set<string>();
             for (const p of data.predictions) {
               if (p.fixture_id != null && (p.pred_home_goals != null || p.pred_away_goals != null)) {
                 home[p.fixture_id] = String(p.pred_home_goals ?? "");
                 away[p.fixture_id] = String(p.pred_away_goals ?? "");
+                savedIds.add(p.fixture_id);
               }
             }
             if (Object.keys(home).length > 0) setHomeGoals((prev) => ({ ...prev, ...home }));
             if (Object.keys(away).length > 0) setAwayGoals((prev) => ({ ...prev, ...away }));
+            if (savedIds.size > 0) setAlreadySavedFixtureIds(savedIds);
           }
         } catch {
           // Non-fatal: form stays empty
@@ -209,9 +213,10 @@ export default function PlayPage() {
         setMsg((m) => ({ ...m, [fixture.id]: `Error: ${json.error ?? "Failed"}` }));
       } else {
         setMsg((m) => ({ ...m, [fixture.id]: "Saved ✅" }));
+        setAlreadySavedFixtureIds((prev) => new Set(prev).add(fixture.id));
       }
-    } catch (e: any) {
-      setMsg((m) => ({ ...m, [fixture.id]: `Error: ${String(e?.message ?? e)}` }));
+    } catch (e: unknown) {
+      setMsg((m) => ({ ...m, [fixture.id]: `Error: ${String(e instanceof Error ? e.message : e)}` }));
     }
 
     setSaving((s) => ({ ...s, [fixture.id]: false }));
@@ -245,8 +250,6 @@ export default function PlayPage() {
           const oddsH = locked ? f.odds_home : f.odds_home_current;
           const oddsD = locked ? f.odds_draw : f.odds_draw_current;
           const oddsA = locked ? f.odds_away : f.odds_away_current;
-          const book = locked ? null : f.odds_current_bookmaker;
-
             return (
               <div
                 key={f.id}
@@ -273,6 +276,11 @@ export default function PlayPage() {
                 </div>
 
                 {/* One line: HomeTeam [input] vs [input] AwayTeam [Save] */}
+                {alreadySavedFixtureIds.has(f.id) && (
+                  <p style={{ margin: "0 0 8px 0", fontSize: 14, opacity: 0.9 }}>
+                    Your prediction has been saved. You can change it and save again before kickoff.
+                  </p>
+                )}
                 <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, rowGap: 10 }}>
                   <span style={{ fontSize: 18, fontWeight: 700, minWidth: 0 }}>{f.home_team}</span>
                   <input

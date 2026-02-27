@@ -1,15 +1,8 @@
-/**
- * Scoring for a single prediction once the fixture result is known.
- * - Correct result (H/D/A): points_awarded = round(stake × locked_odds − stake).
- * - When locked_odds is missing or invalid, fallback_odds (e.g. last snapshot of current odds) is used if provided; otherwise default 2.0.
- * - Exact score bonus: 1.5× that amount, only when both result and exact score are correct.
- */
-
-/** Default odds used when locked_odds was never set (e.g. lock-odds job didn't run). Correct result then gets stake × 2 − stake = +10. */
+/** Default odds used when locked_odds was never set. Correct result then gets stake × 2 − stake = +10. */
 const DEFAULT_LOCKED_ODDS = 2;
 
 export interface ScorePredictionOptions {
-  /** When prediction.locked_odds is null, use this (e.g. fixture odds_home_current / odds_draw_current / odds_away_current for the pick). */
+  /** When prediction.locked_odds is null*/
   fallbackOdds?: number | null;
 }
 
@@ -41,7 +34,7 @@ function actualPick(result: ActualResult): Pick {
   return "D";
 }
 
-/** Normalize DB pick value to H | D | A (handles "Home"/"Draw"/"Away" or H/D/A). */
+/** Normalize DB pick value to H | D | A.*/
 function normalizePick(pick: string | null | undefined): Pick {
   if (!pick || typeof pick !== "string") return "D";
   const u = pick.trim().toLowerCase();
@@ -51,11 +44,7 @@ function normalizePick(pick: string | null | undefined): Pick {
   return "D";
 }
 
-/**
- * Compute points for one prediction given the actual fixture result.
- * Correct result: profit on stake at locked odds. Exact score adds 1.5× that as bonus.
- * When locked_odds is null/invalid, uses options.fallbackOdds (e.g. last snapshot of current odds) then DEFAULT_LOCKED_ODDS.
- */
+/** Compute points for one prediction given the actual fixture result.*/
 export function scorePrediction(
   prediction: PredictionRow,
   result: ActualResult,
@@ -87,10 +76,6 @@ export function scorePrediction(
   };
 }
 
-/**
- * Potential points if correct result, and if exact score too.
- * Uses stake=10: result = 10×odds − 10, exact bonus = 1.5× that.
- */
 export function potentialPoints(lockedOdds: number): {
   resultPoints: number;
   exactScoreBonus: number;

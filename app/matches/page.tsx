@@ -99,8 +99,7 @@ export default function MatchesPage() {
       setFixtures([]);
     } else {
       const gwList = (gwFx ?? []) as Fixture[];
-      const firstKickoff = gwList.length > 0 ? gwList[0].kickoff_time : null;
-      // Show any fixture that kicks off before the first match of this gameweek and isn't finished (rescheduled)
+      const firstKickoff = gwList.length > 0 ? gwList[0].kickoff_time : null; // Show any fixture that kicks off before the first match of this gameweek and isn't finished
       let extraList: Fixture[] = [];
       if (firstKickoff) {
         const { data: extraFx } = await supabase

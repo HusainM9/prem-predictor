@@ -3,10 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 import { requireAdmin } from "@/lib/admin/requireAdmin";
 
 /**
- * POST body: { email: string, leagueId: string }
  * Adds the user with that email to the league as a member (if not already).
- * Use for pre-league accounts that need to be in a "Global" league.
  */
+
 export async function POST(req: Request) {
   const unauthorized = requireAdmin(req);
   if (unauthorized) return unauthorized;

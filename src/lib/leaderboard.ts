@@ -11,8 +11,6 @@ export function getEffectiveGameweek(input: string): number | null {
 
 /**
  * Build the leaderboard page title from context.
- * - No leagueId: "Global leaderboard" or "Leaderboard (GW N)"
- * - With leagueId: "{leagueName} leaderboard" or "{leagueName} leaderboard (GW N)"; falls back to "League leaderboard" when leagueName is null/empty.
  */
 export function getLeaderboardTitle(
   leagueName: string | null,
@@ -45,8 +43,7 @@ export type LeaderboardUserAggregate = {
 };
 
 /**
- * Aggregate prediction rows by user: total points, correct results, exact scores.
- * Sorted by: total_points DESC.
+ * Aggregate prediction rows by user: total points, correct results, exact scores. Sort by total points.
  */
 export function aggregatePointsByUser(
   rows: PredictionRow[]

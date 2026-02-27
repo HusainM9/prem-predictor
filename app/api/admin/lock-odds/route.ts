@@ -5,23 +5,42 @@ import { requireAdmin } from "@/lib/admin/requireAdmin";
 // Currently only getting Unibet
 const PREFERRED_BOOKMAKERS = ["bet365", "skybet"];
 
-function pickPreferredBookmaker(bookmakers: any[]) {
-  if (!Array.isArray(bookmakers) || bookmakers.length === 0) return null;
+interface OddsOutcome {
+  name?: string;
+  price?: number;
+}
+interface OddsMarket {
+  key?: string;
+  outcomes?: OddsOutcome[];
+}
+interface OddsBookmaker {
+  key?: string;
+  title?: string;
+  markets?: OddsMarket[];
+}
+interface OddsEvent {
+  id?: string;
+  home_team?: string;
+  away_team?: string;
+  bookmakers?: OddsBookmaker[];
+}
 
+function pickPreferredBookmaker(bookmakers: OddsBookmaker[]): OddsBookmaker | null {
+  if (!Array.isArray(bookmakers) || bookmakers.length === 0) return null;
   for (const pref of PREFERRED_BOOKMAKERS) {
-    const found = bookmakers.find((b: any) => String(b?.key).toLowerCase() === pref);
+    const found = bookmakers.find((b) => String(b?.key).toLowerCase() === pref);
     if (found) return found;
   }
   return bookmakers[0];
 }
 
-function getH2HOdds(event: any, bookmaker: any) {
-  const h2h = bookmaker?.markets?.find((m: any) => m.key === "h2h");
+function getH2HOdds(event: OddsEvent, bookmaker: OddsBookmaker) {
+  const h2h = bookmaker?.markets?.find((m) => m.key === "h2h");
   const outcomes = h2h?.outcomes ?? [];
 
-  const homePrice = outcomes.find((o: any) => o.name === event.home_team)?.price;
-  const awayPrice = outcomes.find((o: any) => o.name === event.away_team)?.price;
-  const drawPrice = outcomes.find((o: any) => String(o.name).toLowerCase() === "draw")?.price;
+  const homePrice = outcomes.find((o) => o.name === event.home_team)?.price;
+  const awayPrice = outcomes.find((o) => o.name === event.away_team)?.price;
+  const drawPrice = outcomes.find((o) => String(o.name).toLowerCase() === "draw")?.price;
 
   if (homePrice == null || awayPrice == null || drawPrice == null) return null;
 
@@ -125,20 +144,20 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Odds API request failed", status: res.status, body: text }, { status: 500 });
     }
 
-    const events = JSON.parse(text) as any[];
+    const events = JSON.parse(text) as OddsEvent[];
 
     let locked = 0;
     let snap = 0;
 
     for (const f of fixtures) {
-      const event = events.find((e: any) => e.id === f.odds_api_event_id);
+      const event = events.find((e) => e.id === f.odds_api_event_id);
 
       // Prefer locking from the live event odds (best), else fallback to current odds if present
       let oddsToLock: { home: number; draw: number; away: number } | null = null;
       let bookTitle: string | null = null;
 
       if (event) {
-        const bookmaker = pickPreferredBookmaker(event.bookmakers);
+        const bookmaker = pickPreferredBookmaker(event.bookmakers ?? []);
         if (bookmaker) {
           const odds = getH2HOdds(event, bookmaker);
           if (odds) {
@@ -210,7 +229,10 @@ export async function GET(req: Request) {
       bookmaker_preference: ["bet365", "skybet"],
       ...(fixtureIdParam ? {} : { window: { lockFrom: lockFrom.toISOString(), lockTo: lockTo.toISOString() } }),
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: "Route crashed", message: String(err?.message ?? err) }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { error: "Route crashed", message: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
   }
 }

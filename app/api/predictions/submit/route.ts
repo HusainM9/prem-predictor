@@ -63,7 +63,7 @@ export async function POST(req: Request) {
       predHomeGoals > predAwayGoals ? "H" : predAwayGoals > predHomeGoals ? "A" : "D";
     const pickToUse = pick && (pick === "H" || pick === "D" || pick === "A") ? pick : derivedPick;
 
-    // Load fixture for kickoff and odds (lock odds at prediction time)
+    // Load fixture (only for kickoff check)
     const { data: fixture, error: fxErr } = await supabase
       .from("fixtures")
       .select("id, kickoff_time, status, odds_home, odds_draw, odds_away, odds_home_current, odds_draw_current, odds_away_current")
@@ -112,7 +112,10 @@ export async function POST(req: Request) {
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: "Route crashed", message: String(err?.message ?? err) }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { error: "Route crashed", message: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
   }
 }

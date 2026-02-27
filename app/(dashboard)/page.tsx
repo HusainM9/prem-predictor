@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
 export default function DashboardPage() {
-  const [out, setOut] = useState<any>({ loading: true });
+  const [out, setOut] = useState<{ loading?: boolean; data?: unknown; error?: unknown }>({ loading: true });
 
   useEffect(() => {
     (async () => {

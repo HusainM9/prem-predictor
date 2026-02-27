@@ -33,7 +33,7 @@ export default function Home() {
       {userEmail ? (
         <p>Logged in</p>
       ) : (
-        <p>You're not logged in. You can view fixtures and explore; log in to submit predictions.</p>
+        <p>You&apos;re not logged in. You can view fixtures and explore; log in to submit predictions.</p>
       )}
       <div style={{ display: "flex", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
         {userEmail ? (

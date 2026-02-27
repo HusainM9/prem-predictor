@@ -45,7 +45,7 @@ function LeaderboardContent() {
   const leagueId = leagueIdFromUrl.trim() || null;
 
   useEffect(() => {
-    if (!leagueId) setLeagueName(null);
+    if (!leagueId) setLeagueName(null); 
   }, [leagueId]);
 
   const fetchLeaderboard = useCallback(() => {
@@ -86,7 +86,7 @@ function LeaderboardContent() {
     return () => {
       cancelled = true;
     };
-  }, [effectiveGameweek, leagueId, page, search]);
+  }, [effectiveGameweek, leagueId, page, search, router]);
 
   useEffect(() => {
     const cancel = fetchLeaderboard();

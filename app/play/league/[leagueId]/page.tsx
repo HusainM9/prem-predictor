@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
  * global leaderboard and every league they're in. There is no league-specific prediction flow.
  *
  * This page exists so that old links or bookmarks to "predict for a league" (e.g. /play/league/abc-123)
- * still work: we immediately redirect to the main Play page (/play) where users make their
+ * still work: immediately redirect to the main Play page (/play) where users make their
  * single set of predictions.
  */
 export default function LeaguePlayRedirect() {

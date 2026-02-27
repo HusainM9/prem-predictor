@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { requireAdmin } from "@/lib/admin/requireAdmin";
 
-/**
- * List fixtures included on the Play page.
- */
+/** List fixtures included on the Play page. */
+
 export async function GET(req: Request) {
   const err = requireAdmin(req);
   if (err) return err;
