@@ -99,15 +99,19 @@ export default function MatchesPage() {
       setFixtures([]);
     } else {
       const gwList = (gwFx ?? []) as Fixture[];
-      // Include rescheduled/extra fixtures (e.g. include_on_play_page) so they show on /matches
+      const firstKickoff = gwList.length > 0 ? gwList[0].kickoff_time : null;
+      // Show any fixture that kicks off before the first match of this gameweek and isn't finished (rescheduled)
       let extraList: Fixture[] = [];
-      const { data: extraFx } = await supabase
-        .from("fixtures")
-        .select("id,kickoff_time,home_team,away_team,status,gameweek,home_goals,away_goals")
-        .eq("season", "2025/26")
-        .eq("include_on_play_page", true)
-        .order("kickoff_time", { ascending: true });
-      if (extraFx) extraList = extraFx as Fixture[];
+      if (firstKickoff) {
+        const { data: extraFx } = await supabase
+          .from("fixtures")
+          .select("id,kickoff_time,home_team,away_team,status,gameweek,home_goals,away_goals")
+          .eq("season", "2025/26")
+          .lt("kickoff_time", firstKickoff)
+          .neq("status", "finished")
+          .order("kickoff_time", { ascending: true });
+        if (extraFx) extraList = extraFx as Fixture[];
+      }
 
       const seen = new Set(gwList.map((f) => f.id));
       const combined = [...gwList];

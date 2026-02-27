@@ -64,7 +64,7 @@ function SetResultForm({
             >
               {fixtures.map((f) => (
                 <option key={f.id} value={f.id}>
-                  {f.home_team} vs {f.away_team} {f.status === "finished" ? `(${f.home_goals ?? "?"}-${f.away_goals ?? "?"})` : ""}
+                  {f.home_team} vs {f.away_team} {f.status === "Finished" ? `(${f.home_goals ?? "?"}-${f.away_goals ?? "?"})` : ""}
                 </option>
               ))}
             </select>
