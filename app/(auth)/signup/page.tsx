@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-
-const DISPLAY_NAME_MAX_LENGTH = 16;
+import { validateDisplayName, DISPLAY_NAME_MAX_LENGTH } from "@/lib/name-validation";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -17,12 +16,9 @@ export default function SignupPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = displayName.trim();
-    if (!trimmed) {
-      setMsg("Display name is required.");
-      return;
-    }
-    if (trimmed.length > DISPLAY_NAME_MAX_LENGTH) {
-      setMsg(`Display name must be at most ${DISPLAY_NAME_MAX_LENGTH} characters.`);
+    const validation = validateDisplayName(trimmed);
+    if (!validation.valid) {
+      setMsg(validation.error);
       return;
     }
     setLoading(true);

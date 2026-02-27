@@ -66,6 +66,41 @@ describe("scorePrediction", () => {
     );
     expect(result.points_awarded).toBe(10); // 10*2 - 10
   });
+
+  describe("lock-odds and settle flow", () => {
+    it("uses locked_odds when set (e.g. 5.5 from fixture at lock time)", () => {
+      const result = scorePrediction(
+        { pick: "H", stake: 10, locked_odds: 5.5, pred_home_goals: 2, pred_away_goals: 1 },
+        { home_goals: 2, away_goals: 1 }
+      );
+      expect(result.points_awarded).toBe(45); // 10*5.5 - 10
+      expect(result.bonus_exact_score_points).toBe(68); // round(1.5 * 45)
+    });
+
+    it("uses fallbackOdds when locked_odds is null (settle fallback from fixture)", () => {
+      const result = scorePrediction(
+        { pick: "H", stake: 10, locked_odds: null, pred_home_goals: 1, pred_away_goals: 0 },
+        { home_goals: 1, away_goals: 0 },
+        { fallbackOdds: 5.5 }
+      );
+      expect(result.points_awarded).toBe(45); // 10*5.5 - 10, not default 10
+      expect(result.bonus_exact_score_points).toBe(68);
+    });
+
+    it("correct result with locked odds gives more than default-odds payout", () => {
+      const withLocked = scorePrediction(
+        { pick: "D", stake: 10, locked_odds: 3.5, pred_home_goals: 1, pred_away_goals: 1 },
+        { home_goals: 1, away_goals: 1 }
+      );
+      const withDefault = scorePrediction(
+        { pick: "D", stake: 10, locked_odds: null, pred_home_goals: 1, pred_away_goals: 1 },
+        { home_goals: 1, away_goals: 1 }
+      );
+      expect(withLocked.points_awarded).toBe(25); // 10*3.5 - 10
+      expect(withDefault.points_awarded).toBe(10); // 10*2 - 10
+      expect(withLocked.points_awarded).toBeGreaterThan(withDefault.points_awarded);
+    });
+  });
 });
 
 describe("potentialPoints", () => {

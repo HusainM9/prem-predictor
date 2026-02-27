@@ -32,6 +32,14 @@ function getH2HOdds(event: any, bookmaker: any) {
   };
 }
 
+/** Used when snapshotting fixture odds onto predictions. Pick H/D/A → home/draw/away odds. */
+export function getLockedOddsForPick(
+  pick: string,
+  odds: { home: number; draw: number; away: number }
+): number {
+  return pick === "H" ? odds.home : pick === "D" ? odds.draw : odds.away;
+}
+
 export async function GET(req: Request) {
   const unauthorized = requireAdmin(req);
   if (unauthorized) return unauthorized;
@@ -49,23 +57,48 @@ export async function GET(req: Request) {
     // Test the 24h lock window without waiting.
     const { searchParams } = new URL(req.url);
     const nowParam = searchParams.get("now");
+    const fixtureIdParam = searchParams.get("fixtureId")?.trim() || null;
     const now = nowParam ? new Date(nowParam) : new Date();
-
-    // Only lock for fixtures kicking off in the next 24h
     const lockFrom = new Date(now.getTime() + 60 * 1000);
     const lockTo = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
-    const { data: fixtures, error } = await supabase
-      .from("fixtures")
-      .select(
-        "id,odds_api_event_id,home_team,away_team,kickoff_time,odds_locked_at,odds_home_current,odds_draw_current,odds_away_current"
-      )
-      .gte("kickoff_time", lockFrom.toISOString())
-      .lte("kickoff_time", lockTo.toISOString())
-      .is("odds_locked_at", null)
-      .not("odds_api_event_id", "is", null);
+    const fixtureSelect =
+      "id,odds_api_event_id,home_team,away_team,kickoff_time,odds_locked_at,odds_home,odds_draw,odds_away,odds_home_current,odds_draw_current,odds_away_current";
+    type FixtureRow = {
+      id: string;
+      odds_api_event_id: string | null;
+      home_team: string;
+      away_team: string;
+      kickoff_time: string;
+      odds_locked_at: string | null;
+      odds_home: number | null;
+      odds_draw: number | null;
+      odds_away: number | null;
+      odds_home_current: number | null;
+      odds_draw_current: number | null;
+      odds_away_current: number | null;
+    };
+    let fixtures: FixtureRow[];
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (fixtureIdParam) {
+      const { data, error } = await supabase
+        .from("fixtures")
+        .select(fixtureSelect)
+        .eq("id", fixtureIdParam)
+        .maybeSingle();
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      fixtures = data ? [data] : [];
+    } else {
+      const { data, error } = await supabase
+        .from("fixtures")
+        .select(fixtureSelect)
+        .gte("kickoff_time", lockFrom.toISOString())
+        .lte("kickoff_time", lockTo.toISOString())
+        .is("odds_locked_at", null)
+        .not("odds_api_event_id", "is", null);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      fixtures = data ?? [];
+    }
 
     if (!fixtures || fixtures.length === 0) {
       return NextResponse.json({
@@ -73,8 +106,10 @@ export async function GET(req: Request) {
         fixtures_considered: 0,
         odds_locked: 0,
         predictions_snapshotted: 0,
-        note: "No fixtures kicking off in the next 24h.",
-        window: { lockFrom: lockFrom.toISOString(), lockTo: lockTo.toISOString() },
+        note: fixtureIdParam
+          ? `Fixture ${fixtureIdParam} not found or not in lock window.`
+          : "No fixtures kicking off in the next 24h.",
+        ...(fixtureIdParam ? {} : { window: { lockFrom: lockFrom.toISOString(), lockTo: lockTo.toISOString() } }),
       });
     }
 
@@ -113,14 +148,19 @@ export async function GET(req: Request) {
         }
       }
 
-      // Fallback: use stored current odds if Odds API event missing
-      if (!oddsToLock && f.odds_home_current != null && f.odds_draw_current != null && f.odds_away_current != null) {
-        oddsToLock = {
-          home: Number(f.odds_home_current),
-          draw: Number(f.odds_draw_current),
-          away: Number(f.odds_away_current),
-        };
-        bookTitle = null;
+      // Fallback: use fixture locked odds or current odds if Odds API event missing
+      if (!oddsToLock) {
+        const home = f.odds_home ?? f.odds_home_current;
+        const draw = f.odds_draw ?? f.odds_draw_current;
+        const away = f.odds_away ?? f.odds_away_current;
+        if (home != null && draw != null && away != null) {
+          oddsToLock = {
+            home: Number(home),
+            draw: Number(draw),
+            away: Number(away),
+          };
+          bookTitle = null;
+        }
       }
 
       if (!oddsToLock) continue;
@@ -151,10 +191,7 @@ export async function GET(req: Request) {
       for (const p of preds) {
         if (p.locked_odds != null) continue;
 
-        const lo =
-          p.pick === "H" ? oddsToLock.home :
-          p.pick === "D" ? oddsToLock.draw :
-          oddsToLock.away;
+        const lo = getLockedOddsForPick(p.pick, oddsToLock);
 
         const { error: pUpdErr } = await supabase
           .from("predictions")
@@ -171,7 +208,7 @@ export async function GET(req: Request) {
       odds_locked: locked,
       predictions_snapshotted: snap,
       bookmaker_preference: ["bet365", "skybet"],
-      window: { lockFrom: lockFrom.toISOString(), lockTo: lockTo.toISOString() },
+      ...(fixtureIdParam ? {} : { window: { lockFrom: lockFrom.toISOString(), lockTo: lockTo.toISOString() } }),
     });
   } catch (err: any) {
     return NextResponse.json({ error: "Route crashed", message: String(err?.message ?? err) }, { status: 500 });

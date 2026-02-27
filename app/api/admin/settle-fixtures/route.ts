@@ -3,9 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { requireAdmin } from "@/lib/admin/requireAdmin";
 import { scorePrediction } from "@/lib/scoring/points";
 
-/*
- * Marks the fixture as finished and scores all predictions for it.
-*/
+// Settles a fixture with the final score and scores all open predictions
 export async function POST(req: Request) {
   const unauthorized = requireAdmin(req);
   if (unauthorized) return unauthorized;
@@ -21,7 +19,6 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const { fixtureId, homeGoals, awayGoals } = body;
 
-    // Validate required body fields and that goals are non-negative integers
     if (fixtureId == null || homeGoals == null || awayGoals == null) {
       return NextResponse.json(
         { error: "Missing fixtureId, homeGoals, or awayGoals" },
@@ -32,7 +29,7 @@ export async function POST(req: Request) {
     const h = Number(homeGoals);
     const a = Number(awayGoals);
     if (!Number.isInteger(h) || h < 0 || !Number.isInteger(a) || a < 0) {
-      return NextResponse.json({ error: "homeGoals and awayGoals must be non-negative integers" }, { status: 400 });
+      return NextResponse.json({ error: "Goals have to be non-negative integers" }, { status: 400 });
     }
 
     const { data: fixture, error: fxErr } = await supabase
@@ -45,17 +42,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Fixture not found" }, { status: 404 });
     }
 
-    // Set fixture to finished and store the result 
     const { error: updateFxErr } = await supabase
       .from("fixtures")
       .update({ status: "finished", home_goals: h, away_goals: a })
       .eq("id", fixtureId);
 
     if (updateFxErr) {
-      return NextResponse.json({ error: "Failed to update fixture: " + updateFxErr.message }, { status: 500 });
+      return NextResponse.json({ error: "Couldn't update fixture", details: updateFxErr.message }, { status: 500 });
     }
 
-    // Load all predictions for this fixture that aren't settled yet 
     const { data: predictions, error: predErr } = await supabase
       .from("predictions")
       .select("id, pick, stake, locked_odds, pred_home_goals, pred_away_goals")
@@ -69,14 +64,13 @@ export async function POST(req: Request) {
     const result = { home_goals: h, away_goals: a };
     let settled = 0;
 
-    // Fallback odds: last snapshot of current odds (or locked odds) for the pick when prediction.locked_odds is null
+    // use fixture's current odds when prediction has no locked_odds
     const oddsForPick = (pick: string) => {
       if (pick === "H") return fixture.odds_home_current ?? fixture.odds_home;
       if (pick === "D") return fixture.odds_draw_current ?? fixture.odds_draw;
       return fixture.odds_away_current ?? fixture.odds_away;
     };
 
-    // Score each prediction and write points_awarded, bonus fields, settled_at
     for (const p of predictions ?? []) {
       const rawFallback = oddsForPick(p.pick);
       const fallbackOdds = rawFallback != null && Number(rawFallback) > 0 ? Number(rawFallback) : undefined;
@@ -112,9 +106,7 @@ export async function POST(req: Request) {
       predictions_settled: settled,
     });
   } catch (err: unknown) {
-    return NextResponse.json(
-      { error: "Route crashed", message: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: "Something went wrong", message }, { status: 500 });
   }
 }

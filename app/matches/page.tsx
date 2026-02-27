@@ -32,6 +32,19 @@ function formatKickoff(iso: string) {
   });
 }
 
+function displayStatus(f: Fixture): string {
+  const s = (f.status ?? "").toLowerCase();
+  const inPlay = ["1h", "2h", "ht", "live", "in_play", "inplay"];
+  if (inPlay.includes(s)) return "Ongoing";
+  if (s === "scheduled") {
+    const kickoff = new Date(f.kickoff_time).getTime();
+    if (kickoff <= Date.now()) return "Ongoing";
+    return "Scheduled";
+  }
+  if (s === "ft") return "Full time";
+  return f.status || "–";
+}
+
 const POLL_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 
 export default function MatchesPage() {
@@ -74,7 +87,7 @@ export default function MatchesPage() {
     }
     setGw(gameweek);
 
-    const { data: fx, error: fxErr } = await supabase
+    const { data: gwFx, error: fxErr } = await supabase
       .from("fixtures")
       .select("id,kickoff_time,home_team,away_team,status,gameweek,home_goals,away_goals")
       .eq("season", "2025/26")
@@ -85,7 +98,31 @@ export default function MatchesPage() {
       setErr(fxErr.message);
       setFixtures([]);
     } else {
-      setFixtures((fx ?? []) as Fixture[]);
+      const gwList = (gwFx ?? []) as Fixture[];
+      const firstKickoff = gwList.length > 0 ? gwList[0].kickoff_time : null;
+      // Show any fixture that kicks off before the first match of this gameweek and isn't finished (rescheduled)
+      let extraList: Fixture[] = [];
+      if (firstKickoff) {
+        const { data: extraFx } = await supabase
+          .from("fixtures")
+          .select("id,kickoff_time,home_team,away_team,status,gameweek,home_goals,away_goals")
+          .eq("season", "2025/26")
+          .lt("kickoff_time", firstKickoff)
+          .neq("status", "finished")
+          .order("kickoff_time", { ascending: true });
+        if (extraFx) extraList = extraFx as Fixture[];
+      }
+
+      const seen = new Set(gwList.map((f) => f.id));
+      const combined = [...gwList];
+      for (const f of extraList) {
+        if (!seen.has(f.id)) {
+          seen.add(f.id);
+          combined.push(f);
+        }
+      }
+      combined.sort((a, b) => a.kickoff_time.localeCompare(b.kickoff_time));
+      setFixtures(combined);
     }
     setLastUpdated(new Date());
     setLoading(false);
@@ -132,7 +169,7 @@ export default function MatchesPage() {
               <span style={{ flex: 1, minWidth: 0, fontWeight: 600, textAlign: "right" }}>{f.away_team}</span>
             </div>
             <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8 }}>
-              {formatKickoff(f.kickoff_time)} · {f.status}
+              {formatKickoff(f.kickoff_time)} · {displayStatus(f)}
             </div>
           </div>
         ))}

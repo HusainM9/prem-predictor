@@ -5,6 +5,10 @@ export type LeaderboardEntry = {
   user_id: string;
   display_name: string;
   total_points: number;
+  /** Correct result count (tie-breaker). */
+  accuracy?: number;
+  /** Exact score count (tie-breaker). */
+  correct_scores?: number;
 };
 
 type Props = {
@@ -36,6 +40,8 @@ export function LeaderboardTable({ entries, currentUserId, title = "Leaderboard"
               <th style={{ padding: "10px 12px", fontWeight: 600 }}>#</th>
               <th style={{ padding: "10px 12px", fontWeight: 600 }}>User</th>
               <th style={{ padding: "10px 12px", fontWeight: 600, textAlign: "right" }}>Points</th>
+              <th style={{ padding: "10px 12px", fontWeight: 600, textAlign: "right" }} title="Correct results (tie-breaker)">Correct results</th>
+              <th style={{ padding: "10px 12px", fontWeight: 600, textAlign: "right" }} title="Exact scores (tie-breaker)">Exact Scores</th>
             </tr>
           </thead>
           <tbody>
@@ -56,6 +62,8 @@ export function LeaderboardTable({ entries, currentUserId, title = "Leaderboard"
                   )}
                 </td>
                 <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 600 }}>{e.total_points}</td>
+                <td style={{ padding: "10px 12px", textAlign: "right", opacity: 0.9 }}>{e.accuracy ?? 0}</td>
+                <td style={{ padding: "10px 12px", textAlign: "right", opacity: 0.9 }}>{e.correct_scores ?? 0}</td>
               </tr>
             ))}
           </tbody>

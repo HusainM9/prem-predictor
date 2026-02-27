@@ -1,17 +1,20 @@
 // app/api/odds/fetch-current/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAdmin } from "@/lib/admin/requireAdmin";
 
 /**
- * Refreshes current odds for upcoming fixtures. Intended to be called by cron (or admin).
- * Protected by CRON_SECRET so random users cannot trigger Odds API usage.
+ * Refreshes current odds for upcoming fixtures. Callable by cron (CRON_SECRET) or admin (session cookie).
  */
 export async function POST(req: Request) {
+  const adminError = requireAdmin(req);
   const authHeader = req.headers.get("authorization");
   const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
   const querySecret = new URL(req.url).searchParams.get("secret");
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && bearer !== cronSecret && querySecret !== cronSecret) {
+  const adminOk = adminError === null;
+  const cronOk = cronSecret && (bearer === cronSecret || querySecret === cronSecret);
+  if (!adminOk && !cronOk) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

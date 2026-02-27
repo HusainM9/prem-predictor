@@ -171,7 +171,7 @@ export default function HistoryPage() {
                           <span style={{ flex: 1, minWidth: 0, fontWeight: 600 }}>{p.fixture.home_team}</span>
                           <span style={{ fontSize: 14, opacity: 0.9 }}>
                             Your prediction: {p.pred_home_goals}–{p.pred_away_goals}
-                            {p.fixture.status === "finished" &&
+                            {p.fixture.status === "Finished" &&
                               p.fixture.home_goals != null &&
                               p.fixture.away_goals != null && (
                                 <> · Result: {p.fixture.home_goals}–{p.fixture.away_goals}</>

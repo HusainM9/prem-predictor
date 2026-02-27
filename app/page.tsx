@@ -51,7 +51,8 @@ export default function Home() {
       <div style={{ marginTop: 20, display: "flex", flexWrap: "wrap", gap: 12 }}>
         <Link href="/play">Make your predictions</Link>
         <Link href="/matches">Matches</Link>
-        <Link href="/leaderboard">Leaderboard</Link>
+        <Link href="/leaderboard">Global leaderboard</Link>
+        {userEmail && <Link href="/leagues">Leagues</Link>}
         <Link href="/history">My history</Link>
         <Link href="/table">League table</Link>
       </div>

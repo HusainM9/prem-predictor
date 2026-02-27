@@ -24,18 +24,17 @@ type FixtureRow = {
   odds_current_bookmaker: string | null;
 };
 
-/**  List upcoming fixtures for current gameweek, pre-fill existing predictions, save new/updated predictions. */
+/** List upcoming fixtures for the next gameweek and any fixtures added to the play page. */
 export default function PlayPage() {
   const [fixtures, setFixtures] = useState<FixtureRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [gw, setGw] = useState<number | null>(null);
 
-  // Home/away goal inputs, saving flag, status message
   const [homeGoals, setHomeGoals] = useState<Record<string, string>>({});
   const [awayGoals, setAwayGoals] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [msg, setMsg] = useState<Record<string, string>>({});
-  const [gw, setGw] = useState<number | null>(null);
 
   /** Convert predicted score to outcome. H = home win, A = away win, D = draw. */
   function derivedPick(hg: number, ag: number): Pick | null {
@@ -51,13 +50,14 @@ export default function PlayPage() {
 
       const nowIso = new Date().toISOString();
 
-      // Find the next gameweek
+      // Next gameweek = earliest upcoming fixture. Ignore added fixtures.
       const { data: gwRow, error: gwErr } = await supabase
         .from("fixtures")
-        .select("gameweek,kickoff_time")
+        .select("gameweek")
         .eq("season", "2025/26")
         .eq("status", "scheduled")
         .gte("kickoff_time", nowIso)
+        .or("include_on_play_page.is.null,include_on_play_page.eq.false")
         .order("kickoff_time", { ascending: true })
         .limit(1)
         .maybeSingle();
@@ -69,26 +69,49 @@ export default function PlayPage() {
         return;
       }
 
-      const currentGw = gwRow?.gameweek ?? 1;
-      setGw(currentGw);
+      const nextGw = gwRow?.gameweek ?? 1;
+      setGw(nextGw);
 
-      // Load all fixtures for ucoming gameweek with odds 
-      const { data: fx, error: fxErr } = await supabase
+      const selectCols = "id,kickoff_time,home_team,away_team,status,gameweek,odds_home,odds_draw,odds_away,odds_locked_at,odds_home_current,odds_draw_current,odds_away_current,odds_current_updated_at,odds_current_bookmaker";
+
+      const { data: gwFx, error: gwErr2 } = await supabase
         .from("fixtures")
-        .select("id,kickoff_time,home_team,away_team,status,gameweek,odds_home,odds_draw,odds_away,odds_locked_at,odds_home_current,odds_draw_current,odds_away_current,odds_current_updated_at,odds_current_bookmaker")
+        .select(selectCols)
         .eq("season", "2025/26")
-        .eq("gameweek", currentGw)
+        .eq("gameweek", nextGw)
         .gte("kickoff_time", nowIso)
         .order("kickoff_time", { ascending: true });
 
-      if (fxErr) {
-        setErr(fxErr.message);
+      if (gwErr2) {
+        setErr(gwErr2.message);
         setFixtures([]);
         setLoading(false);
         return;
       }
 
-      const fixtureList = (fx ?? []) as FixtureRow[];
+      const gwList = (gwFx ?? []) as FixtureRow[];
+      let extraList: FixtureRow[] = [];
+      const { data: extraFx } = await supabase
+        .from("fixtures")
+        .select(selectCols)
+        .eq("season", "2025/26")
+        .eq("status", "scheduled")
+        .eq("include_on_play_page", true)
+        .gte("kickoff_time", nowIso)
+        .order("kickoff_time", { ascending: true });
+      if (extraFx) extraList = extraFx as FixtureRow[];
+      // If include_on_play_page column does not exist yet, query may error; we just use gwList
+
+      const seen = new Set(gwList.map((f) => f.id));
+      const combined = [...gwList];
+      for (const f of extraList) {
+        if (!seen.has(f.id)) {
+          seen.add(f.id);
+          combined.push(f);
+        }
+      }
+      combined.sort((a, b) => a.kickoff_time.localeCompare(b.kickoff_time));
+      const fixtureList = combined;
       setFixtures(fixtureList);
 
       // Load user's existing predictions for these fixtures to pre-fill the form
@@ -167,7 +190,6 @@ export default function PlayPage() {
       pick: p,
       predHomeGoals: hg,
       predAwayGoals: ag,
-      mode: "global",
       leagueId: null,
     };
 
@@ -199,14 +221,14 @@ export default function PlayPage() {
     <main style={{ padding: 24, maxWidth: 980, margin: "0 auto" }}>
       <h1 style={{ fontSize: 28, marginBottom: 6 }}>Fixtures</h1>
       <p style={{ opacity: 0.75, marginBottom: 18 }}>
-        Gameweek: <strong>{gw ?? "…"}</strong> • Stake fixed at 10 • If correct result: 10 × locked odds
+        Gameweek: <strong>{gw ?? "…"}</strong> • Stake fixed at 10 • Correct result = (10 × odds) − 10. Exact score Bonus = 1.5x.
       </p>
 
       {loading && <p>Loading fixtures…</p>}
       {err && <p style={{ color: "crimson" }}>Error: {err}</p>}
 
       {!loading && !err && fixtures.length === 0 && (
-        <p>No scheduled fixtures found for the current gameweek.</p>
+        <p>No scheduled fixtures for this gameweek.</p>
       )}
 
       {!loading && !err && fixtures.length > 0 && (
@@ -283,7 +305,7 @@ export default function PlayPage() {
 
                 <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: "0.5rem 1rem", alignItems: "center" }}>
                   <span style={{ opacity: 0.7, fontSize: 13 }}>
-                    Kickoff: {formatKickoff(f.kickoff_time)} · {f.status}
+                    GW {f.gameweek} · Kickoff: {formatKickoff(f.kickoff_time)} · {f.status}
                   </span>
                   {(() => {
                     const hgStr = homeGoals[f.id];
@@ -306,7 +328,7 @@ export default function PlayPage() {
                 </div>
 
                 <small style={{ opacity: 0.6, fontSize: 12, marginTop: 4, display: "block" }}>
-                  Points: correct result = 10×locked odds − 10; exact score = 1.5× that. Odds lock 24h before kickoff.
+                  Correct result = (10 × odds) − 10. Exact score Bonus = 1.5x. Odds are locked 24h before kickoff.
                 </small>
               </div>
             );
