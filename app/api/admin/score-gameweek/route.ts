@@ -6,8 +6,7 @@ import { scorePrediction } from "@/lib/scoring/points";
 const DEFAULT_SEASON = "2025/26";
 
 /**
- * Settles all unsettled predictions for finished fixtures in the given (or "current") gameweek.
- * Idempotent: only predictions with settled_at null are updated.
+ * Settles all unsettled predictions for finished fixtures in the given gameweek. Only predictions with settled_at null are updated.
  */
 export async function POST(req: Request) {
   const unauthorized = requireAdmin(req);
@@ -48,7 +47,7 @@ export async function POST(req: Request) {
       gameweek = resolved;
     }
 
-    // Load all finished fixtures in this gameweek (with odds for fallback when prediction.locked_odds is null)
+    // Load all finished fixtures in this gameweek 
     const { data: fixtures, error: fxErr } = await supabase
       .from("fixtures")
       .select("id, home_goals, away_goals, odds_home_current, odds_draw_current, odds_away_current, odds_home, odds_draw, odds_away")

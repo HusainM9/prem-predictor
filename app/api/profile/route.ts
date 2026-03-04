@@ -2,9 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { validateDisplayName } from "@/lib/name-validation";
 
-/**
- * GET: current user's profile (display_name). Requires Authorization: Bearer <access_token>.
- */
 export async function GET(req: Request) {
   try {
     const authHeader = req.headers.get("authorization");
@@ -59,9 +56,7 @@ export async function GET(req: Request) {
 
 const DISPLAY_NAME_COOLDOWN_DAYS = 60;
 
-/**
- * PATCH: update current user's display_name (once per 60 days). Requires Authorization.
- */
+
 export async function PATCH(req: Request) {
   try {
     const authHeader = req.headers.get("authorization");

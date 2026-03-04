@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { Clock, CheckCircle2, ChevronRight } from "lucide-react"
 
 interface DeadlineCardProps {
-  /** Next fixture kickoff time; countdown shows until this. Pass null to hide countdown. */
+  /** Next fixture kickoff time. Countdown shows until this. Pass null to hide countdown. */
   nextKickoff: Date | null
   predicted?: boolean
   className?: string
@@ -58,7 +58,7 @@ export function DeadlineCard({
     return (
       <div
         className={cn(
-          "flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 max-sm:gap-2 max-sm:p-3 sm:gap-4 sm:p-5",
+          "flex items-center gap-4 rounded-lg border border-primary/20 bg-primary/5 p-5",
           className
         )}
       >
@@ -86,7 +86,7 @@ export function DeadlineCard({
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 rounded-lg border p-4 max-sm:gap-3 max-sm:p-3 sm:gap-4 sm:p-5",
+        "flex flex-col gap-4 rounded-lg border p-5",
         isUrgent
           ? "border-negative/30 bg-negative/5"
           : "border-border bg-card",
@@ -113,7 +113,7 @@ export function DeadlineCard({
           </p>
           <p
             className={cn(
-              "text-lg font-bold tabular-nums max-sm:text-lg sm:text-xl",
+              "text-xl font-bold tabular-nums",
               isUrgent ? "text-negative" : "text-foreground"
             )}
           >

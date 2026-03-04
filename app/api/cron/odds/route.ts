@@ -1,12 +1,5 @@
 import { NextResponse } from "next/server";
 
-/**
- * Cron endpoint: run map-odds → fetch-current → lock-odds in sequence.
- *
- * Auth: set CRON_SECRET in env. Vercel Cron automatically sends
- *   Authorization: Bearer <CRON_SECRET> when invoking this path.
- * For external cron services, call with ?secret=<CRON_SECRET> or the same header.
- */
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
@@ -24,7 +17,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // --- Base URL of this app (call our own API routes from the server) ---
+  // Base URL of this app 
   const baseUrl =
     process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
@@ -73,7 +66,7 @@ export async function GET(req: Request) {
       body: lockBody,
     });
 
-    // --- 207 if any step failed but we have partial results ---
+    // 207 if any step failed but we have partial results 
     const allOk = results.every((r) => r.ok);
     return NextResponse.json(
       {

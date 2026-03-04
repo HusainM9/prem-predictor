@@ -5,8 +5,7 @@ import { requireAdmin } from "@/lib/admin/requireAdmin";
 const DEFAULT_SEASON = "2025/26";
 
 /**
- * GET ?gameweek=26&season=2025/26
- * Returns fixtures for that gameweek (for admin dropdown).
+ * Returns fixtures for a gameweek
  */
 export async function GET(req: Request) {
   const unauthorized = requireAdmin(req);

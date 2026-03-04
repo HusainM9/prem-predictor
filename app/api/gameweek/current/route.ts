@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-/**
- * GET /api/gameweek/current
- * Returns the "current" gameweek: max gameweek among fixtures that have already kicked off.
- * Used for leaderboard "This Week" filter.
- */
+
 export async function GET() {
   try {
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

@@ -11,8 +11,7 @@ import { getClientId, isRateLimited } from "@/lib/rate-limit";
 const MAX_PAGE_SIZE = 50;
 
 /**
- * Return users ordered by total points, one prediction applies everywhere for now. Filter by gameweek. Filter by display name.
- * Rate limited (60/min per IP) to reduce scraping.
+ * Return users ordered by total points, one prediction applies everywhere for now. Filter by  gameweek. Filter by display name.
  */
 export async function GET(req: Request) {
   try {

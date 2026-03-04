@@ -50,7 +50,7 @@ export async function GET(req: Request) {
       const row = {
         external_source: "football-data",
         external_id: String(m.id),
-        season: "2025/26", // keep your season label consistent
+        season: "2025/26",
         gameweek: m.matchday ?? 0,
         kickoff_time: m.utcDate,
         home_team: m.homeTeam?.name ?? "",
@@ -60,7 +60,6 @@ export async function GET(req: Request) {
         away_goals: m.score?.fullTime?.away ?? null,
       };
 
-      // Upsert by (external_source, external_id) if you added that constraint
       const { error } = await supabase.from("fixtures").upsert(row, {
         onConflict: "external_source,external_id",
       });

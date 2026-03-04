@@ -1,6 +1,5 @@
 /**
- * Server-side standings fetch. Cached for 1 hour (Next.js Data Cache).
- * Used by the table page and the standings API route. One snapshot per hour.
+ * Server-side standings fetch. Cached for 1 hour. One snapshot per hour.
  */
 
 export const STANDINGS_REVALIDATE_SEC = 60 * 60;
@@ -31,10 +30,7 @@ export type StandingsResult =
   | { data: StandingsData; error?: undefined }
   | { data?: undefined; error: string; status?: number };
 
-/**
- * Fetches Premier League standings from Football-Data.org.
- * Cached per hour; revalidateTag(STANDINGS_CACHE_TAG) invalidates (e.g. admin refresh).
- */
+/** Fetches Premier League standings from Football-Data.org */
 export async function getStandings(): Promise<StandingsResult> {
   const token = process.env.FOOTBALL_DATA_API_KEY;
   if (!token) {

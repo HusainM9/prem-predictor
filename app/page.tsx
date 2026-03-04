@@ -5,7 +5,6 @@ import { LandingPage } from "@/components/landing-page"
 import { DashboardPage } from "@/components/dashboard-page"
 import { supabase } from "@/lib/supabase/client"
 
-/** Home: v0 landing when logged out, v0 dashboard when logged in. */
 export default function Home() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [authReady, setAuthReady] = useState(false)

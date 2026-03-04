@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * POST: submit or update a prediction. Requires Authorization: Bearer <access_token>.
- * User id is taken from the JWT, not the body, so users cannot submit as someone else.
+ * Submit or update a prediction. User id is taken from the JWT so users cannot submit as someone else.
  */
 export async function POST(req: Request) {
   try {

@@ -6,79 +6,6 @@ type LogEntry = { time: string; action: string; ok: boolean; text: string };
 
 type FixtureOption = { id: string; home_team: string; away_team: string; status: string; home_goals: number | null; away_goals: number | null; is_stuck?: boolean };
 
-function ResyncMatchForm({
-  run,
-  loading,
-}: {
-  run: (action: string, method: "GET" | "POST", path: string, body?: object) => void;
-  loading: string | null;
-}) {
-  const [gameweek, setGameweek] = useState("26");
-  const [fixtures, setFixtures] = useState<FixtureOption[]>([]);
-  const [fixtureId, setFixtureId] = useState("");
-  const [loadingFixtures, setLoadingFixtures] = useState(false);
-
-  async function loadFixtures() {
-    const gw = gameweek.trim();
-    if (!gw) return;
-    setLoadingFixtures(true);
-    try {
-      const res = await fetch(`/api/admin/fixtures?gameweek=${encodeURIComponent(gw)}`, { credentials: "include" });
-      const data = await res.json();
-      if (res.ok && Array.isArray(data.fixtures)) {
-        setFixtures(data.fixtures);
-        if (data.fixtures.length > 0 && !fixtureId) setFixtureId(data.fixtures[0].id);
-      }
-    } finally {
-      setLoadingFixtures(false);
-    }
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <input
-          type="number"
-          min={1}
-          placeholder="Gameweek"
-          value={gameweek}
-          onChange={(e) => setGameweek(e.target.value)}
-          style={{ width: 72, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.06)", color: "inherit" }}
-        />
-        <button type="button" onClick={loadFixtures} disabled={loadingFixtures} style={btnStyle}>
-          {loadingFixtures ? "Loading…" : "Load fixtures"}
-        </button>
-      </div>
-      {fixtures.length > 0 && (
-        <>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 14 }}>
-            Fixture
-            <select
-              value={fixtureId}
-              onChange={(e) => setFixtureId(e.target.value)}
-              style={{ padding: 8, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.06)", color: "inherit", maxWidth: 400 }}
-            >
-              {fixtures.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.home_team} vs {f.away_team} {f.status === "finished" ? `(${f.home_goals ?? "?"}-${f.away_goals ?? "?"})` : ""} {f.is_stuck ? "(stuck)" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            disabled={!fixtureId || !!loading}
-            onClick={() => run("Resync match", "POST", "/api/admin/resync-match", { fixtureId })}
-            style={btnStyle}
-          >
-            {loading === "Resync match" ? "Resyncing…" : "Resync match"}
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
-
 function SetResultForm({
   run,
   loading,
@@ -591,14 +518,6 @@ export default function AdminPage() {
         >
           {loading === "Sync results" ? "Syncing…" : "Sync results from API"}
         </button>
-      </section>
-
-      <section style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 10 }}>Resync match</h2>
-        <p style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
-          Re-fetch one fixture from the API (single match + competition list), apply stuck/replacement logic, then settle predictions if finished.
-        </p>
-        <ResyncMatchForm run={run} loading={loading} />
       </section>
 
       <section style={{ marginBottom: 24 }}>

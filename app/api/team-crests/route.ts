@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { getClientId, isRateLimited } from "@/lib/rate-limit";
 
-/**
- * GET: returns team name → crest URL map from Premier League standings (Football-Data.org).
- * Used by TeamLogo to show crests like the league table page. Rate limited with standings.
- */
+/** Used by TeamLogo to show crests like the league table page. Rate limited with standings. */
 export async function GET(req: Request) {
   const clientId = getClientId(req);
   if (isRateLimited(clientId)) {

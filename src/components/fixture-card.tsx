@@ -27,7 +27,6 @@ export function FixtureCard({
   predicted = false,
   prediction,
   className,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- optional, kept for API compatibility
   onPredict,
 }: FixtureCardProps) {
   return (

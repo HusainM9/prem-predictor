@@ -3,10 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { requireAdmin } from "@/lib/admin/requireAdmin";
 
 /**
- * POST body: { fixtureId, homeGoals, awayGoals }
- * Updates only the fixture's score. Does NOT set status to finished or run
- * prediction scoring. Use for live score updates so /matches shows the score;
- * use settle-fixtures when the match is over.
+ * Updates only the fixture's score. Doesnt set status to finished or run prediction scoring.
  */
 export async function POST(req: Request) {
   const unauthorized = requireAdmin(req);

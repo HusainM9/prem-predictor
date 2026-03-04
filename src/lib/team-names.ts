@@ -1,6 +1,7 @@
 /**
- * Short display names and 3-letter abbreviations for teams.
- * Level 1: short name (e.g. Wolves). Level 2: 3-letter abbreviation (e.g. WOL). Level 3: badge only.
+ * 1. short name Wolves 
+ * 2. 3-letter abbreviation WOL 
+ * 3. badge only
  */
 
 const SHORT_NAMES: Record<string, string> = {

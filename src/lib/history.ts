@@ -1,7 +1,4 @@
-/**
- * Sum total_points across all gameweeks from the by_gameweek API response shape.
- * Used by the history page to compute overall total.
- */
+
 export function sumTotalPointsFromByGameweek(
   byGameweek: Record<string, { total_points: number }>
 ): number {

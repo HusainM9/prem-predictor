@@ -53,7 +53,6 @@ export default function HistoryPage() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount to load history
   }, []);
 
   const gwData = useMemo(() => {

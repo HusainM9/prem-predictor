@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Light theme — clean light bg with emerald green accent */
+  /* Light theme */
   --background: oklch(0.985 0.002 260);
   --foreground: oklch(0.15 0.02 260);
   --card: oklch(1 0 0);
@@ -46,7 +46,7 @@
 }
 
 .dark {
-  /* Dark sports theme — pitch-black bg with emerald green accent */
+  /* Dark sports theme. pitch-black bg with emerald green accent */
   --background: oklch(0.1 0.005 260);
   --foreground: oklch(0.95 0 0);
   --card: oklch(0.155 0.005 260);

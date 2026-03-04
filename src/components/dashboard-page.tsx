@@ -89,7 +89,6 @@ function EmptyState({
   )
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- required by parent, may be used later
 export function DashboardPage({ onLogout }: { onLogout: () => void }) {
   const router = useRouter()
   const [nextKickoff, setNextKickoff] = useState<Date | null>(null)
@@ -302,7 +301,6 @@ export function DashboardPage({ onLogout }: { onLogout: () => void }) {
     loadLeaderboard(currentLeague.id).then(({ entries }) => {
       setLeagueLeaderboards((prev) => ({ ...prev, [currentLeague.id]: entries }))
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- currentLeague.id is the trigger
   }, [currentLeague?.id, leagueLeaderboards, loadLeaderboard])
 
   const rankSuffix = (n: number) => {

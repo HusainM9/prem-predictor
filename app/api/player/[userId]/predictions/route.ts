@@ -2,16 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getClientId, isRateLimited } from "@/lib/rate-limit";
 
-/** UUID v4 pattern (Supabase auth user ids). */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/**
- * GET /api/player/[userId]/predictions
- * Returns that user's predictions only for fixtures where kickoff_time has passed.
- * Query: ?gameweek=N to filter by gameweek (no "all" - omit for all, or pass N for one GW).
- * Returns total_points (all past), gameweek_points (for filtered list), current_gameweek.
- * Rate limited (60/min per IP). Rejects non-UUID userId.
- */
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ userId: string }> }

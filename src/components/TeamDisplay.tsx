@@ -6,22 +6,20 @@ import { getShortName, getAbbreviation } from "@/lib/team-names";
 
 type TeamDisplayProps = {
   teamName: string;
-  /** Optional crest URL (e.g. from standings API). If not provided, TeamLogo fetches by name. */
   crestUrl?: string | null;
-  /** Size of the badge in pixels */
+  /** Size of the badge */
   size?: number;
-  /** Alignment of content (for Home column use end, Away use start) */
+  /** Alignment of content*/
   align?: "start" | "end" | "center";
-  /** "stacked" = badge on top, short name below. "abbr" = badge + abbr on small screens, badge + short name on md+ (e.g. iPad Pro). */
+  /** stacked = badge on top, abbr = badge + abbr on small screens, badge + short name on mid+. */
   layout?: "inline" | "stacked" | "abbr";
   className?: string;
 };
 
 /**
- * Responsive team display:
- * - inline (default): three levels as viewport shrinks — md+ badge + short name, sm badge + abbr, max-sm badge only
- * - stacked: badge on top, shortened name below
- * - abbr: badge + 3-letter abbreviation below md; badge + shortened name from md up (tablet/desktop)
+ * inline: three levels as viewport shrinks. mid+ badge + short name, small badge + abbr, max-small badge only
+ * stacked: badge on top, shortened name below
+ * abbr: badge + 3-letter abbreviation below mid badge + shortened name from mid up 
  */
 export function TeamDisplay({
   teamName,
@@ -43,7 +41,6 @@ export function TeamDisplay({
 
   const badge =
     crestUrl ? (
-      // eslint-disable-next-line @next/next/no-img-element -- external crest URL
       <img
         src={crestUrl}
         alt=""

@@ -17,8 +17,7 @@ export type LeagueSummaryItem = {
 };
 
 /**
- * GET: Leagues the current user is a member of, ordered by joined_at.
- * Returns summary: member_count, my_rank, my_points, gap_to_first, invite_code.
+ * Leagues the current user is a member of, ordered by joined_at.
  */
 export async function GET(req: Request) {
   try {
@@ -84,7 +83,7 @@ export async function GET(req: Request) {
 
     const allPreds = (predRows ?? []) as PredictionRow[];
 
-    // Current gameweek = latest that has kicked off; previous = one before for weekly rank change
+    // Current gameweek = latest that has kicked off, previous = one before for weekly rank change
     const nowIso = new Date().toISOString();
     const { data: currentGwRow } = await supabase
       .from("fixtures")
@@ -169,7 +168,7 @@ export async function GET(req: Request) {
 }
 
 /**
- * POST: Create a private league with a 6-char invite code, caller becomes owner.
+ * Create a private league with a 6-char invite code, caller becomes owner.
  */
 export async function POST(req: Request) {
   try {
