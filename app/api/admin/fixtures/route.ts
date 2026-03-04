@@ -26,7 +26,7 @@ export async function GET(req: Request) {
     }
     const { data, error } = await supabase
       .from("fixtures")
-      .select("id, kickoff_time, home_team, away_team, status, home_goals, away_goals")
+      .select("id, kickoff_time, home_team, away_team, status, home_goals, away_goals, is_stuck")
       .eq("season", season)
       .eq("gameweek", Number(gameweek))
       .order("kickoff_time", { ascending: true });

@@ -1,61 +1,62 @@
-"use client";
+"use client"
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { supabase } from "@/lib/supabase/client";
+import { useEffect, useState } from "react"
+import { LandingPage } from "@/components/landing-page"
+import { DashboardPage } from "@/components/dashboard-page"
+import { supabase } from "@/lib/supabase/client"
 
-/** Home: anyone can browse Play, Matches, Leaderboard, Table. Submit and History require login. */
+/** Home: v0 landing when logged out, v0 dashboard when logged in. */
 export default function Home() {
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [authReady, setAuthReady] = useState(false)
+  const [currentGameweek, setCurrentGameweek] = useState<number | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      setUserEmail(data.user?.email ?? null);
-    });
-
+      setUserEmail(data.user?.email ?? null)
+      setAuthReady(true)
+    })
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserEmail(session?.user?.email ?? null);
-    });
+      setUserEmail(session?.user?.email ?? null)
+    })
+    return () => sub.subscription.unsubscribe()
+  }, [])
 
-    return () => {
-      sub.subscription.unsubscribe();
-    };
-  }, []);
+  useEffect(() => {
+    if (authReady && !userEmail) {
+      const nowIso = new Date().toISOString()
+      supabase
+        .from("fixtures")
+        .select("gameweek")
+        .eq("season", "2025/26")
+        .lt("kickoff_time", nowIso)
+        .order("kickoff_time", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then(({ data }) => {
+          const gw = (data as { gameweek?: number } | null)?.gameweek
+          setCurrentGameweek(gw != null && Number.isInteger(gw) ? gw : null)
+        })
+    }
+  }, [authReady, userEmail])
 
-  async function logout() {
-    await supabase.auth.signOut();
+  if (!authReady) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground">Loading…</div>
+      </div>
+    )
   }
 
-  return (
-    <main style={{ padding: 40 }}>
-      <h1>Prem Predictor</h1>
+  if (userEmail) {
+    return (
+      <DashboardPage
+        onLogout={async () => {
+          await supabase.auth.signOut()
+        }}
+      />
+    )
+  }
 
-      {userEmail ? (
-        <p>Logged in</p>
-      ) : (
-        <p>You&apos;re not logged in. You can view fixtures and explore; log in to submit predictions.</p>
-      )}
-      <div style={{ display: "flex", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
-        {userEmail ? (
-          <button onClick={logout} style={{ padding: 10 }}>
-            Log out
-          </button>
-        ) : (
-          <>
-            <Link href="/login">Log in</Link>
-            <Link href="/signup">Sign up</Link>
-          </>
-        )}
-      </div>
-
-      <div style={{ marginTop: 20, display: "flex", flexWrap: "wrap", gap: 12 }}>
-        <Link href="/play">Make your predictions</Link>
-        <Link href="/matches">Matches</Link>
-        <Link href="/leaderboard">Global leaderboard</Link>
-        {userEmail && <Link href="/leagues">Leagues</Link>}
-        <Link href="/history">My history</Link>
-        <Link href="/table">League table</Link>
-      </div>
-    </main>
-  );
+  return <LandingPage onLogin={() => {}} currentGameweek={currentGameweek} />
 }

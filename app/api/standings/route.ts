@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { getClientId, isRateLimited } from "@/lib/rate-limit";
+import { getStandings, STANDINGS_REVALIDATE_SEC } from "@/lib/standings";
+
+/** Cache-Control: 1-hour snapshot so browsers/CDN cache and reduce requests. */
+const CACHE_CONTROL = `public, max-age=${STANDINGS_REVALIDATE_SEC}, s-maxage=${STANDINGS_REVALIDATE_SEC}, stale-while-revalidate=300`;
 
 /**
- * GET: returns Premier League standings from Football-Data.org (proxied so token stays server-side).
- * Rate limited to 30 requests per minute per IP to protect Football-Data quota.
+ * GET: returns Premier League standings (hourly snapshot). Proxied so token stays server-side.
+ * Response is cacheable for 1 hour so many users get it from cache without hitting the server.
  */
 export async function GET(req: Request) {
   const clientId = getClientId(req);
@@ -14,21 +18,18 @@ export async function GET(req: Request) {
     );
   }
 
-  const token = process.env.FOOTBALL_DATA_API_KEY;
-  if (!token) {
-    return NextResponse.json({ error: "FOOTBALL_DATA_API_KEY not set" }, { status: 500 });
-  }
-  const res = await fetch("https://api.football-data.org/v4/competitions/PL/standings", {
-    headers: { "X-Auth-Token": token },
-    cache: "no-store",
-  });
-  const text = await res.text();
-  if (!res.ok) {
+  const result = await getStandings();
+  if (result.error) {
     return NextResponse.json(
-      { error: "Standings request failed", status: res.status, body: text },
-      { status: 500 }
+      { error: result.error, status: result.status },
+      {
+        status: result.status === 429 ? 429 : 500,
+        headers: { "Cache-Control": "no-store" },
+      }
     );
   }
-  const data = JSON.parse(text);
-  return NextResponse.json(data);
+
+  return NextResponse.json(result.data, {
+    headers: { "Cache-Control": CACHE_CONTROL },
+  });
 }

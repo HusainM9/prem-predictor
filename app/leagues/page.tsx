@@ -6,14 +6,51 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { validateLeagueName } from "@/lib/name-validation";
 
-type LeagueRow = { id: string; name: string };
+type LeagueSummaryItem = {
+  id: string;
+  name: string;
+  invite_code: string | null;
+  member_count: number;
+  my_rank: number | null;
+  my_points: number | null;
+  gap_to_first: number | null;
+  rank_change: number | null;
+};
+
+const LEAGUE_AVATAR_COLORS = [
+  "bg-emerald-700 text-white",  
+  "bg-teal-600 text-white",     
+  "bg-amber-800 text-white",    
+  "bg-violet-700 text-white",  
+  "bg-sky-700 text-white",
+];
+
+function getLeagueInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase().slice(0, 2);
+  return name.slice(0, 2).toUpperCase();
+}
+
+function avatarColor(leagueId: string): string {
+  let h = 0;
+  for (let i = 0; i < leagueId.length; i++) h = (h << 5) - h + leagueId.charCodeAt(i);
+  return LEAGUE_AVATAR_COLORS[Math.abs(h) % LEAGUE_AVATAR_COLORS.length];
+}
+
+function rankSuffix(rank: number): string {
+  if (rank === 1) return "1st";
+  if (rank === 2) return "2nd";
+  if (rank === 3) return "3rd";
+  return `${rank}th`;
+}
 
 export default function LeaguesPage() {
   const router = useRouter();
-  const [leagues, setLeagues] = useState<LeagueRow[]>([]);
+  const [leagues, setLeagues] = useState<LeagueSummaryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
+  const [tab, setTab] = useState<"create" | "join">("create");
   const [createName, setCreateName] = useState("");
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createSuccess, setCreateSuccess] = useState<{ name: string; invite_code: string; id: string } | null>(null);
@@ -24,37 +61,19 @@ export default function LeaguesPage() {
 
   const loadLeagues = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
+    if (!session?.access_token) return;
 
-    const { data: members, error: memErr } = await supabase
-      .from("league_members")
-      .select("league_id")
-      .eq("user_id", session.user.id);
-
-    if (memErr) {
-      setErr(memErr.message);
+    const res = await fetch("/api/leagues", {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setErr(data.error ?? "Failed to load leagues");
       setLeagues([]);
       return;
     }
-
-    if (!members?.length) {
-      setLeagues([]);
-      return;
-    }
-
-    const leagueIds = [...new Set(members.map((m) => m.league_id))];
-    const { data: leagueRows, error: leagueErr } = await supabase
-      .from("leagues")
-      .select("id, name")
-      .in("id", leagueIds)
-      .order("name");
-
-    if (leagueErr) {
-      setErr(leagueErr.message);
-      setLeagues([]);
-    } else {
-      setLeagues((leagueRows ?? []) as LeagueRow[]);
-    }
+    setErr(null);
+    setLeagues(data.leagues ?? []);
   }, []);
 
   useEffect(() => {
@@ -72,9 +91,7 @@ export default function LeaguesPage() {
         if (!cancelled) setLoading(false);
       });
     });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [router, loadLeagues]);
 
   async function handleCreate(e: React.FormEvent) {
@@ -150,136 +167,201 @@ export default function LeaguesPage() {
   }
 
   return (
-    <main style={{ padding: 24, maxWidth: 640, margin: "0 auto" }}>
-      <div style={{ marginBottom: 18, display: "flex", gap: 12, alignItems: "center" }}>
-        <Link href="/" style={{ opacity: 0.85, fontSize: 14 }}>← Home</Link>
-        <Link href="/leaderboard" style={{ opacity: 0.85, fontSize: 14 }}>Global leaderboard</Link>
-      </div>
-      <h1 style={{ fontSize: 28, marginBottom: 8 }}>Leagues</h1>
-      <p style={{ opacity: 0.8, marginBottom: 24 }}>
-        Create a private league or join one with a 6-character code. One prediction on Play applies to every league unless otherwise specified.
-      </p>
+    <main className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6">
+        <div className="mb-6 flex items-center gap-4">
+          <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">
+            ← Back
+          </Link>
+          <span className="text-muted-foreground">·</span>
+          <span className="font-semibold text-foreground">Scoreline</span>
+        </div>
 
-      {loading && <p>Loading…</p>}
-      {err && <p style={{ color: "crimson", marginBottom: 12 }}>{err}</p>}
-      {joinMsg && <p style={{ color: "green", marginBottom: 12 }}>{joinMsg}</p>}
+        <h1 className="text-2xl font-bold text-foreground mb-2">Leagues</h1>
+        <p className="text-muted-foreground mb-6">
+          Create a private league or join with a 6-character code.
+        </p>
 
-      <section style={{ marginBottom: 28 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 10 }}>Create a league</h2>
-        <form onSubmit={handleCreate} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 14, opacity: 0.85 }}>League name</span>
-            <input
-              type="text"
-              value={createName}
-              onChange={(e) => setCreateName(e.target.value)}
-              placeholder="e.g. Work League"
-              maxLength={100}
-              style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.06)", color: "inherit", minWidth: 200 }}
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={!createName.trim() || createSubmitting}
-            style={{
-              padding: "10px 18px",
-              borderRadius: 8,
-              border: "1px solid rgba(255,255,255,0.2)",
-              background: "rgba(255,255,255,0.1)",
-              color: "inherit",
-              fontWeight: 600,
-              cursor: createSubmitting || !createName.trim() ? "not-allowed" : "pointer",
-              opacity: createSubmitting || !createName.trim() ? 0.6 : 1,
-            }}
-          >
-            {createSubmitting ? "Creating…" : "Create"}
-          </button>
-        </form>
-        {createSuccess && (
-          <div
-            style={{
-              marginTop: 14,
-              padding: 14,
-              borderRadius: 10,
-              border: "1px solid rgba(255,255,255,0.15)",
-              background: "rgba(255,255,255,0.06)",
-            }}
-          >
-            <p style={{ fontWeight: 600, marginBottom: 6 }}>League created</p>
-            <p style={{ marginBottom: 6 }}>Invite code: <strong style={{ letterSpacing: 2 }}>{createSuccess.invite_code}</strong></p>
-            <p style={{ fontSize: 13, opacity: 0.8, marginBottom: 10 }}>Share this code so others can join.</p>
-            <Link
-              href={`/leagues/${createSuccess.id}`}
-              style={{ fontSize: 14, opacity: 0.9 }}
+        {err && (
+          <p className="text-destructive mb-4 text-sm">{err}</p>
+        )}
+        {joinMsg && (
+          <p className="text-primary mb-4 text-sm">{joinMsg}</p>
+        )}
+
+        {/* Create / Join card */}
+        <section className="rounded-lg border border-border bg-card p-4 mb-8">
+          <div className="flex gap-1 mb-4">
+            <button
+              type="button"
+              onClick={() => setTab("create")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                tab === "create"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted/50 text-muted-foreground hover:text-foreground"
+              }`}
             >
-              Open league →
-            </Link>
+              <span aria-hidden>+</span> Create
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("join")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                tab === "join"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted/50 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span aria-hidden>🔗</span> Join
+            </button>
           </div>
-        )}
-      </section>
 
-      <section style={{ marginBottom: 28 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 10 }}>Join a league</h2>
-        <form onSubmit={handleJoin} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 14, opacity: 0.85 }}>Invite code (6 characters)</span>
-            <input
-              type="text"
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.replace(/\s/g, "").slice(0, 6))}
-              placeholder="Enter code"
-              maxLength={6}
-              style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.06)", color: "inherit", width: 150, letterSpacing: 2 }}
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={joinCode.trim().length !== 6 || joinSubmitting}
-            style={{
-              padding: "10px 18px",
-              borderRadius: 8,
-              border: "1px solid rgba(255,255,255,0.2)",
-              background: "rgba(255,255,255,0.1)",
-              color: "inherit",
-              fontWeight: 600,
-              cursor: joinCode.trim().length !== 6 || joinSubmitting ? "not-allowed" : "pointer",
-              opacity: joinCode.trim().length !== 6 || joinSubmitting ? 0.6 : 1,
-            }}
-          >
-            {joinSubmitting ? "Joining…" : "Join"}
-          </button>
-        </form>
-      </section>
+          {tab === "create" && (
+            <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-3">
+              <label className="flex-1 min-w-[180px]">
+                <span className="block text-sm text-muted-foreground mb-1">League name</span>
+                <input
+                  type="text"
+                  value={createName}
+                  onChange={(e) => setCreateName(e.target.value)}
+                  placeholder="e.g. Office Legends"
+                  maxLength={100}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={!createName.trim() || createSubmitting}
+                className="rounded-lg bg-primary px-4 py-2 font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:pointer-events-none"
+              >
+                + Create
+              </button>
+            </form>
+          )}
 
-      <section>
-        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 10 }}>Your leagues</h2>
-        {!loading && !err && leagues.length === 0 && (
-          <p style={{ opacity: 0.8 }}>You’re not in any leagues yet. Create one or join with a code above.</p>
-        )}
-        {!loading && !err && leagues.length > 0 && (
-          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-            {leagues.map((l) => (
-              <li key={l.id}>
-                <Link
-                  href={`/leagues/${l.id}`}
-                  style={{
-                    display: "block",
-                    padding: "14px 18px",
-                    borderRadius: 12,
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    background: "rgba(255,255,255,0.04)",
-                    textDecoration: "none",
-                    color: "inherit",
-                    fontWeight: 600,
-                  }}
-                >
-                  {l.name} →
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+          {tab === "join" && (
+            <form onSubmit={handleJoin} className="flex flex-wrap items-end gap-3">
+              <label className="flex-1 min-w-[180px]">
+                <span className="block text-sm text-muted-foreground mb-1">Invite code (6 characters)</span>
+                <input
+                  type="text"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.replace(/\s/g, "").slice(0, 6).toUpperCase())}
+                  placeholder="Enter code"
+                  maxLength={6}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring tracking-widest font-mono"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={joinCode.trim().length !== 6 || joinSubmitting}
+                className="rounded-lg bg-primary px-4 py-2 font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:pointer-events-none"
+              >
+                {joinSubmitting ? "Joining…" : "Join"}
+              </button>
+            </form>
+          )}
+
+          {createSuccess && (
+            <div className="mt-4 p-3 rounded-lg border border-border bg-muted/30">
+              <p className="font-semibold text-foreground mb-1">League created</p>
+              <p className="text-sm text-muted-foreground mb-2">
+                Invite code: <strong className="tracking-widest font-mono text-foreground">{createSuccess.invite_code}</strong>
+              </p>
+              <Link href={`/leagues/${createSuccess.id}`} className="text-sm text-primary hover:underline">
+                Open league →
+              </Link>
+            </div>
+          )}
+        </section>
+
+        {/* Your leagues */}
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Your leagues
+            </h2>
+            {!loading && leagues.length > 0 && (
+              <span className="text-sm text-muted-foreground">
+                {leagues.length} {leagues.length === 1 ? "league" : "leagues"}
+              </span>
+            )}
+          </div>
+
+          {loading && <p className="text-muted-foreground">Loading…</p>}
+          {!loading && !err && leagues.length === 0 && (
+            <p className="text-muted-foreground">
+              You&apos;re not in any leagues yet. Create one or join with a code above.
+            </p>
+          )}
+          {!loading && leagues.length > 0 && (
+            <ul className="space-y-2 list-none p-0 m-0">
+              {leagues.map((league, index) => {
+                const isFirst = league.my_rank === 1;
+                const isSecond = league.my_rank === 2;
+                const isThird = league.my_rank === 3;
+                const rankCh = league.rank_change ?? null;
+                return (
+                  <li key={league.id}>
+                    <Link
+                      href={`/leagues/${league.id}`}
+                      className="flex items-center gap-4 rounded-lg border border-border bg-card p-4 no-underline text-foreground hover:bg-muted/20 transition-colors"
+                    >
+                      <div
+                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold ${avatarColor(league.id)}`}
+                      >
+                        {getLeagueInitials(league.name)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold">{league.name}</span>
+                          <span className="rounded bg-primary/20 px-1.5 py-0.5 text-xs font-medium text-primary">
+                            {index === 0 ? "DEFAULT" : "ACTIVE"}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-0.5">
+                          {league.member_count} {league.member_count === 1 ? "member" : "members"}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {league.my_rank != null && league.my_points != null && (
+                            <>
+                              <span className="font-semibold text-foreground flex items-center gap-1">
+                                {rankSuffix(league.my_rank)}
+                                {isFirst && <span className="text-warning" aria-hidden>👑</span>}
+                                {isSecond && (<span className="text-2xl" aria-hidden>🥈</span>)}
+                                {isThird && (<span className="text-2xl" aria-hidden>🥉</span>)}
+                                {rankCh != null && rankCh !== 0 && (
+                                  <span
+                                    className={rankCh > 0 ? "text-primary text-xs font-normal" : "text-destructive text-xs font-normal"}
+                                    title={rankCh > 0 ? "Up from last gameweek" : "Down from last gameweek"}
+                                  >
+                                    {rankCh > 0 ? "↑" : "↓"} {Math.abs(rankCh)}
+                                  </span>
+                                )}
+                              </span>
+                              <span className="text-muted-foreground">{league.my_points} pts</span>
+                              {isFirst ? (
+                                <span className="text-primary text-sm">Leading the league</span>
+                              ) : league.gap_to_first != null ? (
+                                <span className="text-muted-foreground text-sm">
+                                  {league.gap_to_first} pts off 1st
+                                </span>
+                              ) : null}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-muted-foreground shrink-0" aria-hidden>
+                        →
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
     </main>
   );
 }

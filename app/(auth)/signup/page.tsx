@@ -1,91 +1,145 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { supabase } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
-import { validateDisplayName, DISPLAY_NAME_MAX_LENGTH } from "@/lib/name-validation";
+import { useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabase/client"
+import { validateDisplayName, DISPLAY_NAME_MAX_LENGTH } from "@/lib/name-validation"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 
 export default function SignupPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const router = useRouter()
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [displayName, setDisplayName] = useState("")
+  const [msg, setMsg] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
   async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = displayName.trim();
-    const validation = validateDisplayName(trimmed);
+    e.preventDefault()
+    const trimmed = displayName.trim()
+    const validation = validateDisplayName(trimmed)
     if (!validation.valid) {
-      setMsg(validation.error);
-      return;
+      setMsg(validation.error ?? "Invalid display name")
+      return
     }
-    setLoading(true);
-    setMsg(null);
+    setLoading(true)
+    setMsg(null)
 
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { display_name: trimmed } },
-    });
+    })
 
-    setLoading(false);
+    setLoading(false)
 
-    if (error) return setMsg(error.message);
+    if (error) return setMsg(error.message)
 
-    // If email confirmations are off, user is logged in immediately.
-    // If on, they must confirm via email first.
-    router.push("/");
+    router.push("/")
   }
 
   return (
-    <main style={{ padding: 40, maxWidth: 420 }}>
-      <h1>Sign up</h1>
-      <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 12 }}>
-        <label>
-          Display name
-          <input
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            type="text"
-            required
-            minLength={1}
-            maxLength={DISPLAY_NAME_MAX_LENGTH}
-            placeholder="How you'll appear on the leaderboard"
-            style={{ width: "100%", padding: 10, marginTop: 6 }}
-          />
-        </label>
-
-        <label>
-          Email
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            type="email"
-            required
-            style={{ width: "100%", padding: 10, marginTop: 6 }}
-          />
-        </label>
-
-        <label>
-          Password
-          <input
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            type="password"
-            required
-            minLength={6}
-            style={{ width: "100%", padding: 10, marginTop: 6 }}
-          />
-        </label>
-
-        <button disabled={loading} style={{ padding: 10 }}>
-          {loading ? "Creating account..." : "Create account"}
-        </button>
-
-        {msg && <p style={{ color: "crimson" }}>{msg}</p>}
-      </form>
+    <main className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center px-4 py-12">
+      <Card className="w-full max-w-[400px] border-border bg-card">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold text-foreground">
+            Get started
+          </CardTitle>
+          <CardDescription className="text-muted-foreground">
+            Create an account to join leagues and make predictions.
+          </CardDescription>
+        </CardHeader>
+        <form onSubmit={onSubmit}>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="displayName" className="text-foreground">
+                Display name
+              </Label>
+              <Input
+                id="displayName"
+                type="text"
+                placeholder="How you'll appear on the leaderboard"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                required
+                minLength={1}
+                maxLength={DISPLAY_NAME_MAX_LENGTH}
+                autoComplete="username"
+                className="bg-background border-border"
+              />
+              <p className="text-xs text-muted-foreground">
+                Max {DISPLAY_NAME_MAX_LENGTH} characters
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-foreground">
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                className="bg-background border-border"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-foreground">
+                Password
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="At least 6 characters"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+                autoComplete="new-password"
+                className="bg-background border-border"
+              />
+            </div>
+            {msg && (
+              <p className="text-sm text-destructive" role="alert">
+                {msg}
+              </p>
+            )}
+          </CardContent>
+          <CardFooter className="flex flex-col gap-4 pt-6">
+            <Button
+              type="submit"
+              className="w-full"
+              size="lg"
+              disabled={loading}
+            >
+              {loading ? "Creating account…" : "Create account"}
+            </Button>
+            <p className="text-center text-sm text-muted-foreground">
+              Already have an account?{" "}
+              <Link
+                href="/login"
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
+                Log in
+              </Link>
+            </p>
+          </CardFooter>
+        </form>
+      </Card>
     </main>
-  );
+  )
 }

@@ -58,17 +58,21 @@ export async function GET(req: Request) {
     }
 
     const fixtureIds = [...new Set(predictions.map((p) => p.fixture_id))];
+    const nowIso = new Date().toISOString();
     const { data: fixtures, error: fxErr } = await supabase
       .from("fixtures")
       .select("id, home_team, away_team, kickoff_time, gameweek, status, home_goals, away_goals")
-      .in("id", fixtureIds);
+      .in("id", fixtureIds)
+      .lt("kickoff_time", nowIso);
 
     if (fxErr) {
       return NextResponse.json({ error: fxErr.message }, { status: 500 });
     }
+    const pastFixtureIds = new Set((fixtures ?? []).map((f) => f.id));
+    const pastPredictions = predictions.filter((p) => pastFixtureIds.has(p.fixture_id));
     const fixtureMap = new Map((fixtures ?? []).map((f) => [f.id, f]));
 
-    let list = predictions.map((p) => {
+    let list = pastPredictions.map((p) => {
       const fixture = fixtureMap.get(p.fixture_id);
       const totalPoints = (p.points_awarded ?? 0) + (p.bonus_exact_score_points ?? p.bonus_points ?? 0);
       return {
@@ -114,6 +118,19 @@ export async function GET(req: Request) {
       byGameweek.get(gw)!.push(item);
     }
 
+    let current_gameweek: number | null = null;
+    const { data: gwRow } = await supabase
+      .from("fixtures")
+      .select("gameweek")
+      .eq("season", "2025/26")
+      .lt("kickoff_time", nowIso)
+      .order("kickoff_time", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (gwRow?.gameweek != null && Number.isInteger(gwRow.gameweek)) {
+      current_gameweek = gwRow.gameweek;
+    }
+
     return NextResponse.json({
       predictions: list,
       by_gameweek: Object.fromEntries(
@@ -125,6 +142,7 @@ export async function GET(req: Request) {
           },
         ])
       ),
+      current_gameweek,
     });
   } catch (err: unknown) {
     return NextResponse.json(

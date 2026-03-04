@@ -6,14 +6,24 @@ import {
   parseLeaderboardPagination,
   type PredictionRow,
 } from "@/lib/leaderboard";
+import { getClientId, isRateLimited } from "@/lib/rate-limit";
 
 const MAX_PAGE_SIZE = 50;
 
 /**
- * Return users ordered by total points, one prediction applies everywhere for now. Filter by  gameweek. Filter by display name.
+ * Return users ordered by total points, one prediction applies everywhere for now. Filter by gameweek. Filter by display name.
+ * Rate limited (60/min per IP) to reduce scraping.
  */
 export async function GET(req: Request) {
   try {
+    const clientId = getClientId(req);
+    if (isRateLimited(clientId, 60, 60 * 1000)) {
+      return NextResponse.json(
+        { error: "Too many requests. Try again in a minute." },
+        { status: 429, headers: { "Retry-After": "60" } }
+      );
+    }
+
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     if (!serviceKey) {
