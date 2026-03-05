@@ -57,11 +57,12 @@ export default function HistoryPage() {
 
   const gwData = useMemo(() => {
     const key = String(selectedGameweek);
-    return byGameweek[key] ?? { predictions: [], total_points: 0 };
+    return byGameweek[key] ?? { predictions: [], total_points: 0, bonuses: [] };
   }, [byGameweek, selectedGameweek]);
 
   const predictionsForGw = gwData.predictions;
   const gameweekPoints = gwData.total_points;
+  const bonusesForGw = Array.isArray(gwData.bonuses) ? gwData.bonuses : [];
 
   if (loading) {
     return (
@@ -94,6 +95,7 @@ export default function HistoryPage() {
       onSelectedGameweekChange={setSelectedGameweek}
       predictionsForGw={predictionsForGw}
       gameweekPoints={gameweekPoints}
+      bonusesForGw={bonusesForGw}
     />
   );
 }

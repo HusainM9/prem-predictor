@@ -25,6 +25,8 @@ export type HistoryPrediction = {
   } | null;
 };
 
+export type GameweekBonus = { bonus_type: string; points: number };
+
 type Props = {
   title: string;
   backHref: string;
@@ -36,6 +38,8 @@ type Props = {
   predictionsForGw: HistoryPrediction[];
   gameweekPoints: number;
   positionChange?: number | null;
+  /** Bonuses earned in this gameweek (underdog_win, correct_7, all_correct, exact_4). */
+  bonusesForGw?: GameweekBonus[];
 };
 
 const MAX_GW = 38;
@@ -46,6 +50,13 @@ function outcomeType(p: HistoryPrediction): "exact" | "correct" | "wrong" {
   if ((p.points_awarded ?? 0) > 0) return "correct";
   return "wrong";
 }
+
+const BONUS_LABELS: Record<string, string> = {
+  underdog_win: "Biggest underdog win",
+  correct_7: "7+ correct results",
+  all_correct: "All results correct",
+  exact_4: "4+ exact scores",
+};
 
 export function HistoryView({
   title,
@@ -58,8 +69,10 @@ export function HistoryView({
   predictionsForGw,
   gameweekPoints,
   positionChange,
+  bonusesForGw = [],
 }: Props) {
   const [gwInput, setGwInput] = useState(String(selectedGameweek));
+  const [historyTab, setHistoryTab] = useState<"matches" | "bonuses">("matches");
   useEffect(() => {
     setGwInput(String(selectedGameweek));
   }, [selectedGameweek]);
@@ -68,7 +81,7 @@ export function HistoryView({
     (p) => (p.bonus_exact_score_points ?? p.bonus_points ?? 0) > 0
   ).length;
   const correctCount = predictionsForGw.filter((p) => (p.points_awarded ?? 0) > 0).length;
-  const wrongCount = predictionsForGw.filter((p) => (p.points_awarded ?? 0) === 0).length;
+  const wrongCount = predictionsForGw.filter((p) => (p.points_awarded ?? 0) < 0).length;
 
   const maxGw = currentGameweek ?? MAX_GW;
   const gwNum = Math.max(1, Math.min(maxGw, selectedGameweek));
@@ -119,8 +132,15 @@ export function HistoryView({
           <div>
             <p className="text-3xl font-bold text-foreground max-sm:text-2xl sm:text-4xl">{totalPoints}</p>
             <p className="text-xs text-muted-foreground uppercase tracking-wide max-sm:text-xs sm:text-sm">Total pts</p>
-            {thisWeekPoints > 0 && selectedGameweek === (currentGameweek ?? selectedGameweek) && (
-              <p className="text-sm text-primary mt-1">+{thisWeekPoints} this week</p>
+            {thisWeekPoints !== 0 && (
+              <p
+                className={`text-sm mt-1 ${
+                  thisWeekPoints > 0 ? "text-primary" : "text-destructive"
+                }`}
+              >
+                {thisWeekPoints > 0 ? "+" : ""}
+                {thisWeekPoints} this week
+              </p>
             )}
           </div>
 
@@ -191,9 +211,41 @@ export function HistoryView({
           </p>
         )}
 
-        <section className="mt-6 max-sm:mt-4 sm:mt-8">
+        <div className="mt-6 max-sm:mt-4 sm:mt-8">
+          <div className="flex rounded-lg border border-border bg-muted/50 p-0.5 w-fit">
+            <button
+              type="button"
+              onClick={() => setHistoryTab("matches")}
+              className={`min-h-[36px] rounded-md px-3 text-sm font-medium transition-colors ${
+                historyTab === "matches"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Matches
+            </button>
+            <button
+              type="button"
+              onClick={() => setHistoryTab("bonuses")}
+              className={`min-h-[36px] rounded-md px-3 text-sm font-medium transition-colors ${
+                historyTab === "bonuses"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Bonuses
+              {bonusesForGw.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-primary/20 px-1.5 py-0.5 text-xs">
+                  {bonusesForGw.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+        {historyTab === "matches" && (
+        <section className="mt-4">
           <h2 className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-foreground max-sm:text-xs sm:text-sm">
-            <span>Matches</span>
+            <span>Fixtures</span>
             <span className="font-normal text-muted-foreground max-sm:text-xs sm:text-sm">
               {predictionsForGw.length} fixture{predictionsForGw.length !== 1 ? "s" : ""}
             </span>
@@ -233,11 +285,9 @@ export function HistoryView({
                               {p.fixture.away_team}
                             </span>
                           </div>
-                          {type !== "wrong" && (
-                            <span className="rounded-md bg-primary/20 px-2 py-0.5 text-sm font-semibold text-primary">
-                              +{pts}
-                            </span>
-                          )}
+                          <span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${type === "wrong" ? "bg-destructive/20 text-destructive" : "bg-primary/20 text-primary"}`}>
+                            {type === "wrong" ? pts : `+${pts}`}
+                          </span>
                         </div>
                         <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 border-t border-border pt-2 max-sm:mt-2 max-sm:gap-1.5 max-sm:pt-2 sm:mt-3 sm:gap-2 sm:pt-3">
                           <span className="text-[10px] text-muted-foreground uppercase tracking-wide max-sm:text-[10px] sm:text-xs">
@@ -255,7 +305,7 @@ export function HistoryView({
                           )}
                           {type === "wrong" && (
                             <span className="text-destructive text-sm font-medium flex items-center justify-center gap-1">
-                              <span aria-hidden><FaXmark className="text-red-500 text-xxl" /></span> 0 Incorrect
+                              <span aria-hidden><FaXmark className="text-red-500 text-xxl" /></span> Wrong ({p.points_awarded ?? 0} pts)
                             </span>
                           )}
                         </div>
@@ -279,6 +329,40 @@ export function HistoryView({
             Only completed matches are shown. Switch gameweeks to view past results.
           </p>
         </section>
+        )}
+
+        {historyTab === "bonuses" && (
+          <section className="mt-4">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground max-sm:text-xs sm:text-sm">
+              Gameweek {selectedGameweek} bonuses
+            </h2>
+            {bonusesForGw.length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                No bonuses earned for this gameweek. Bonuses are applied after the gameweek is settled.
+              </p>
+            ) : (
+              <ul className="mt-2 list-none space-y-2 p-0 m-0">
+                {bonusesForGw.map((b, i) => (
+                  <li
+                    key={`${b.bonus_type}-${i}`}
+                    className="rounded-lg border border-border bg-card p-3 pl-4 border-l-4 border-l-primary"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-foreground">
+                        {BONUS_LABELS[b.bonus_type] ?? b.bonus_type}
+                      </span>
+                      <span className="text-sm font-semibold text-primary">
+                        +{b.points} pts
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
+        </div>
       </div>
     </main>
   );

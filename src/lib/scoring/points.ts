@@ -1,9 +1,14 @@
-/** Default odds used when locked_odds was never set. Correct result then gets stake × 2 − stake = +10. */
+/** Default odds used when locked_odds was never set. Correct result then gets stake × odds. */
 const DEFAULT_LOCKED_ODDS = 2;
+
+/** Stake amount when not set. */
+const DEFAULT_STAKE = 10;
 
 export interface ScorePredictionOptions {
   /** When prediction.locked_odds is null*/
   fallbackOdds?: number | null;
+  /** +bonus added to points_awarded when prediction is correct and this fixture is game of the week . */
+  gameOfTheWeekBonus?: number;
 }
 
 export type Pick = "H" | "D" | "A";
@@ -44,7 +49,10 @@ function normalizePick(pick: string | null | undefined): Pick {
   return "D";
 }
 
-/** Compute points for one prediction given the actual fixture result.*/
+/** Compute points for one prediction given the actual fixture result.
+ * Correct result 10×odds + exact score bonus. Wrong lose stake (-10).
+ * Optionally add game-of-the-week bonus when correct.
+ */
 export function scorePrediction(
   prediction: PredictionRow,
   result: ActualResult,
@@ -57,15 +65,24 @@ export function scorePrediction(
     prediction.pred_home_goals === result.home_goals &&
     prediction.pred_away_goals === result.away_goals;
 
-  const stake = prediction.stake ?? 10;
+  const stake = prediction.stake ?? DEFAULT_STAKE;
   const rawLocked = prediction.locked_odds != null && prediction.locked_odds > 0 ? prediction.locked_odds : null;
   const rawFallback = options?.fallbackOdds != null && options.fallbackOdds > 0 ? options.fallbackOdds : null;
   const lockedOdds = rawLocked ?? rawFallback ?? DEFAULT_LOCKED_ODDS;
-  const resultPoints = correctResult ? stake * lockedOdds - stake : 0;
-  const points_awarded = Math.round(resultPoints);
 
+  let points_awarded: number;
+  const basePoints = stake * lockedOdds;
+  if (correctResult) {
+    points_awarded = Math.round(basePoints);
+    const gotwBonus = options?.gameOfTheWeekBonus ?? 0;
+    points_awarded += gotwBonus;
+  } else {
+    points_awarded = -stake;
+  }
+
+  const resultPointsForExact = correctResult ? basePoints : 0;
   const bonus_exact_score_points = exactScore && correctResult
-    ? Math.round(1.5 * resultPoints)
+    ? Math.round(1.5 * resultPointsForExact)
     : 0;
   const bonus_points = bonus_exact_score_points;
 
@@ -79,8 +96,10 @@ export function scorePrediction(
 export function potentialPoints(lockedOdds: number): {
   resultPoints: number;
   exactScoreBonus: number;
+  wrongLoss: number;
 } {
-  const resultPoints = Math.round(10 * lockedOdds - 10);
-  const exactScoreBonus = Math.round(1.5 * (10 * lockedOdds - 10));
-  return { resultPoints, exactScoreBonus };
+  const stake = DEFAULT_STAKE;
+  const resultPoints = Math.round(stake * lockedOdds);
+  const exactScoreBonus = Math.round(1.5 * resultPoints);
+  return { resultPoints, exactScoreBonus, wrongLoss: -stake };
 }

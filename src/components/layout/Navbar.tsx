@@ -71,10 +71,9 @@ export function Navbar() {
           <Link href="/" className="flex shrink-0 items-center gap-1.5 sm:gap-2" aria-label="Scoreline home">
             {showCustomLogo ? (
               <img
-                src="/logo2.png"
+                src="/logo3.jpg"
                 alt=""
-                width={50}
-                height={50}
+                style={{ borderRadius: "20%", width: "40px", height: "40px" }}
                 className="size-9 object-contain max-[420px]:size-8 sm:size-10 md:size-14"
                 onError={() => setLogoError(true)}
               />

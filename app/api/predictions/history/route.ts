@@ -111,11 +111,32 @@ export async function GET(req: Request) {
       return tB.localeCompare(tA);
     });
 
-    const byGameweek = new Map<number, typeof list>();
+    const byGameweek = new Map<number, { predictions: typeof list; total_points: number; bonuses: Array<{ bonus_type: string; points: number }> }>();
     for (const item of list) {
       const gw = item.fixture?.gameweek ?? 0;
-      if (!byGameweek.has(gw)) byGameweek.set(gw, []);
-      byGameweek.get(gw)!.push(item);
+      if (!byGameweek.has(gw)) {
+        byGameweek.set(gw, { predictions: [], total_points: 0, bonuses: [] });
+      }
+      const entry = byGameweek.get(gw)!;
+      entry.predictions.push(item);
+      entry.total_points = entry.predictions.reduce((s, x) => s + x.total_points, 0);
+    }
+
+    const gameweeks = [...byGameweek.keys()];
+    if (gameweeks.length > 0) {
+      const { data: bonusRows } = await supabase
+        .from("user_gameweek_bonuses")
+        .select("gameweek, bonus_type, points")
+        .eq("user_id", user.id)
+        .in("gameweek", gameweeks);
+      for (const b of bonusRows ?? []) {
+        const gw = b.gameweek as number;
+        const entry = byGameweek.get(gw);
+        if (entry) {
+          entry.bonuses.push({ bonus_type: b.bonus_type as string, points: b.points ?? 0 });
+          entry.total_points += b.points ?? 0;
+        }
+      }
     }
 
     let current_gameweek: number | null = null;
@@ -134,11 +155,12 @@ export async function GET(req: Request) {
     return NextResponse.json({
       predictions: list,
       by_gameweek: Object.fromEntries(
-        [...byGameweek.entries()].map(([gw, arr]) => [
+        [...byGameweek.entries()].map(([gw, entry]) => [
           gw,
           {
-            predictions: arr,
-            total_points: arr.reduce((s, x) => s + x.total_points, 0),
+            predictions: entry.predictions,
+            total_points: entry.total_points,
+            bonuses: entry.bonuses,
           },
         ])
       ),

@@ -478,6 +478,13 @@ export default function AdminPage() {
           >
             Score GW {gameweekInput || "…"}
           </button>
+          <button
+            onClick={() => run("Reset scores for current gameweek", "POST", "/api/admin/score-gameweek", { reset: true })}
+            disabled={!!loading}
+            style={{ ...btnStyle, marginLeft: 8, fontSize: 12 }}
+          >
+            {loading === "Reset scores for current gameweek" ? "Resetting…" : "Reset current GW scores"}
+          </button>
         </div>
         <p style={{ fontSize: 12, opacity: 0.65, marginTop: 6 }}>
           Uses the latest gameweek with finished fixtures, or the number you enter.

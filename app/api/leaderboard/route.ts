@@ -86,7 +86,7 @@ export async function GET(req: Request) {
       filtered = filtered.filter((r) => gwSet.has(r.fixture_id));
     }
 
-    const sorted = aggregatePointsByUser(filtered);
+    let sorted = aggregatePointsByUser(filtered);
     const userIds = sorted.map((e) => e.user_id);
     if (userIds.length === 0) {
       return NextResponse.json({
@@ -97,6 +97,28 @@ export async function GET(req: Request) {
         gameweek: gameweek ?? null,
       });
     }
+
+    // Add user_gameweek_bonuses (underdog +10, 7+ correct +10, all correct +50, 4+ exact +10)
+    const bonusQuery = supabase
+      .from("user_gameweek_bonuses")
+      .select("user_id, points")
+      .in("user_id", userIds);
+    if (gameweek != null) {
+      bonusQuery.eq("gameweek", gameweek);
+    }
+    const { data: bonusRows } = await bonusQuery;
+    const bonusByUser = new Map<string, number>();
+    for (const b of bonusRows ?? []) {
+      const uid = b.user_id as string;
+      bonusByUser.set(uid, (bonusByUser.get(uid) ?? 0) + (b.points ?? 0));
+    }
+    sorted = sorted
+      .map((e) => ({ ...e, total_points: e.total_points + (bonusByUser.get(e.user_id) ?? 0) }))
+      .sort((a, b) => {
+        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+        if (b.accuracy !== a.accuracy) return b.accuracy - a.accuracy;
+        return b.correct_scores - a.correct_scores;
+      });
 
     const { data: profiles } = await supabase
       .from("profiles")

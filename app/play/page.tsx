@@ -6,6 +6,8 @@ import { Info } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { potentialPoints } from "@/lib/scoring/points";
 import { TeamDisplay } from "@/components/TeamDisplay";
+import { ScoringInfo } from "@/components/ScoringInfo";
+import { VoteForMatchOfTheWeek } from "@/components/VoteForMatchOfTheWeek";
 
 type Pick = "H" | "D" | "A";
 
@@ -70,6 +72,8 @@ export default function PlayPage() {
   >([]);
   /** 0 = current gameweek settled, 1 = previous gameweek. */
   const [settledGameweekOffset, setSettledGameweekOffset] = useState(0);
+  /** Fixture id that won the last game-of-the-week vote (used for highlight). */
+  const [matchOfTheWeekFixtureId, setMatchOfTheWeekFixtureId] = useState<string | null>(null);
 
   /** Convert predicted score to outcome. H = home win, A = away win, D = draw. */
   function derivedPick(hg: number, ag: number): Pick | null {
@@ -432,18 +436,19 @@ export default function PlayPage() {
                   onMouseEnter={() => { clearHoverLeave(); setScoringInfoHover(true); }}
                   onMouseLeave={scheduleHoverLeave}
                 >
-                  <section className="w-full max-w-md rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-                    <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground mb-2">How scoring works</h2>
-                    <ul className="list-disc list-inside space-y-1">
-                      <li>Pick <strong className="text-foreground">Home</strong>, <strong className="text-foreground">Draw</strong>, or <strong className="text-foreground">Away</strong> and predict the exact score.</li>
-                      <li><strong className="text-foreground">Correct result</strong> (right outcome): you get points based on the locked odds at the time you predicted. Formula: <em>10 × odds − 10</em> (e.g. odds 2.5 → 15 pts).</li>
-                      <li><strong className="text-foreground">Exact score</strong> (result and score correct): you get the result points <em>plus</em> a bonus of 1.5× those points (e.g. 15 + 23 = 38 pts).</li>
-                      <li>Wrong result = 0 points. Points are locked when the match kicks off.</li>
-                    </ul>
-                  </section>
+                  <ScoringInfo />
                 </div>
               )}
             </div>
+
+        {!loading && !err && (
+          <div className="mb-6">
+            <VoteForMatchOfTheWeek
+              variant="full"
+              onLastWinnerChange={setMatchOfTheWeekFixtureId}
+            />
+          </div>
+        )}
 
         {loading && <p className="text-muted-foreground">Loading fixtures…</p>}
         {err && <p className="text-destructive">Error: {err}</p>}
@@ -469,6 +474,7 @@ export default function PlayPage() {
                   </div>
                   <div className="space-y-3">
                     {groupFixtures.map((f) => {
+                      const isMatchOfTheWeek = matchOfTheWeekFixtureId === f.id;
                       const locked = !!f.odds_locked_at;
                       const oddsSource = locked
                         ? "locked"
@@ -495,10 +501,10 @@ export default function PlayPage() {
                       const pick = valid ? derivedPick(hg, ag) : null;
                       const oddsForPick =
                         pick === "H" ? oddsH : pick === "D" ? oddsD : oddsA;
-                      const { resultPoints, exactScoreBonus } =
+                      const { resultPoints, exactScoreBonus, wrongLoss } =
                         oddsForPick != null
                           ? potentialPoints(oddsForPick)
-                          : { resultPoints: 0, exactScoreBonus: 0 };
+                          : { resultPoints: 0, exactScoreBonus: 0, wrongLoss: -10 };
 
                       const saved = alreadySavedFixtureIds.has(f.id);
                       const lastSaved = lastSavedScores[f.id];
@@ -508,11 +514,13 @@ export default function PlayPage() {
                         hg === lastSaved.h &&
                         ag === lastSaved.a;
                       const hasUnsavedChanges = hasInput && !currentMatchesSaved;
-                      const barColor = currentMatchesSaved
-                        ? "border-l-primary"
-                        : hasUnsavedChanges
-                          ? "border-l-warning"
-                          : "border-l-transparent";
+                      const barColor = isMatchOfTheWeek
+                        ? "border-l-primary bg-primary/5"
+                        : currentMatchesSaved
+                          ? "border-l-primary"
+                          : hasUnsavedChanges
+                            ? "border-l-warning"
+                            : "border-l-transparent";
 
                       return (
                         <div
@@ -535,6 +543,11 @@ export default function PlayPage() {
                                 <span className="text-xs text-muted-foreground">
                                   {locked ? "Locked" : oddsSource === "current" ? "● Live odds" : ""}
                                 </span>
+                                {isMatchOfTheWeek && (
+                                  <span className="ml-2 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">
+                                    Match of the week
+                                  </span>
+                                )}
                               </>
                             ) : (
                               <span className="text-xs text-muted-foreground">
@@ -600,7 +613,7 @@ export default function PlayPage() {
                           {/* Potential points */}
                           {valid && pick && oddsH != null && oddsD != null && oddsA != null && (
                             <p className="mt-2 text-center text-sm text-muted-foreground">
-                              Pts: {resultPoints} Exact: +{exactScoreBonus}
+                              Correct: {resultPoints} pts · Exact: +{exactScoreBonus} · Wrong: {wrongLoss}
                               {valid && pick && ` · ${hg}–${ag} (${pick === "H" ? "Home" : pick === "A" ? "Away" : "Draw"})`}
                             </p>
                           )}

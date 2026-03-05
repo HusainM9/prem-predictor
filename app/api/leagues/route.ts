@@ -121,11 +121,38 @@ export async function GET(req: Request) {
       membersByLeague.set(m.league_id, set);
     }
 
-    const result: LeagueSummaryItem[] = ordered.map((league) => {
-      const memberIds = membersByLeague.get(league.id) ?? new Set();
+    const result: LeagueSummaryItem[] = [];
+
+    for (const league of ordered) {
+      const memberIds = membersByLeague.get(league.id) ?? new Set<string>();
       const memberCount = memberIds.size;
       const filtered = allPreds.filter((r) => memberIds.has(r.user_id));
-      const sorted = aggregatePointsByUser(filtered);
+      let sorted = aggregatePointsByUser(filtered);
+
+      // Include user_gameweek_bonuses in totals for league members
+      const leagueUserIds = sorted.map((e) => e.user_id);
+      if (leagueUserIds.length > 0) {
+        const { data: bonusRows } = await supabase
+          .from("user_gameweek_bonuses")
+          .select("user_id, points")
+          .in("user_id", leagueUserIds);
+        const bonusByUser = new Map<string, number>();
+        for (const b of bonusRows ?? []) {
+          const uid = b.user_id as string;
+          bonusByUser.set(uid, (bonusByUser.get(uid) ?? 0) + (b.points ?? 0));
+        }
+        sorted = sorted
+          .map((e) => ({
+            ...e,
+            total_points: e.total_points + (bonusByUser.get(e.user_id) ?? 0),
+          }))
+          .sort((a, b) => {
+            if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+            if (b.accuracy !== a.accuracy) return b.accuracy - a.accuracy;
+            return b.correct_scores - a.correct_scores;
+          });
+      }
+
       const myIndex = sorted.findIndex((e) => e.user_id === user.id);
       const myRank = myIndex >= 0 ? myIndex + 1 : null;
       const myPoints = myIndex >= 0 ? sorted[myIndex].total_points : null;
@@ -146,7 +173,7 @@ export async function GET(req: Request) {
         }
       }
 
-      return {
+      result.push({
         id: league.id,
         name: league.name,
         invite_code: league.invite_code ?? null,
@@ -155,8 +182,8 @@ export async function GET(req: Request) {
         my_points: myPoints,
         gap_to_first: gapToFirst,
         rank_change: rankChange,
-      };
-    });
+      });
+    }
 
     return NextResponse.json({ leagues: result });
   } catch (err: unknown) {
