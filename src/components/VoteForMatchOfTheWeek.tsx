@@ -16,6 +16,7 @@ type GotwState = {
   my_vote_fixture_id: string | null;
   gameweek: number | null;
   season: string;
+  current_vote_winner: LastVoteWinner;
   last_vote_winner: LastVoteWinner;
 };
 
@@ -66,11 +67,12 @@ export function VoteForMatchOfTheWeek({
       my_vote_fixture_id: data.my_vote_fixture_id ?? null,
       gameweek: data.gameweek ?? null,
       season: data.season ?? "2025/26",
+      current_vote_winner: data.current_vote_winner ?? null,
       last_vote_winner: data.last_vote_winner ?? null,
     };
     setState(nextState);
     if (onLastWinnerChange) {
-      onLastWinnerChange(nextState.last_vote_winner?.fixture_id ?? null);
+      onLastWinnerChange(nextState.current_vote_winner?.fixture_id ?? nextState.last_vote_winner?.fixture_id ?? null);
     }
     setLoading(false);
   };
@@ -149,6 +151,11 @@ export function VoteForMatchOfTheWeek({
             Last: GW{state.last_vote_winner.gameweek} {state.last_vote_winner.home_team} vs {state.last_vote_winner.away_team}
           </span>
         )}
+        {state.current_vote_winner && (
+          <span className="text-xs text-primary">
+            Settled: GW{state.current_vote_winner.gameweek} {state.current_vote_winner.home_team} vs {state.current_vote_winner.away_team}
+          </span>
+        )}
       </div>
     );
   }
@@ -175,7 +182,15 @@ export function VoteForMatchOfTheWeek({
       </button>
       {state.last_vote_winner && (
         <p className="mt-1 text-xs text-muted-foreground">
-          Last result: GW{state.last_vote_winner.gameweek} <strong className="text-foreground">{state.last_vote_winner.home_team} vs {state.last_vote_winner.away_team}</strong>
+          Game of the Week: GW{state.last_vote_winner.gameweek} <strong className="text-foreground">{state.last_vote_winner.home_team} vs {state.last_vote_winner.away_team}</strong>
+        </p>
+      )}
+      {state.current_vote_winner && (
+        <p className="mt-1 text-xs text-primary">
+          Settled for GW{state.current_vote_winner.gameweek}:{" "}
+          <strong className="text-foreground">
+            {state.current_vote_winner.home_team} vs {state.current_vote_winner.away_team}
+          </strong>
         </p>
       )}
       {state.voting_open ? (
@@ -216,7 +231,7 @@ export function VoteForMatchOfTheWeek({
         </>
       ) : (
         <p className="mt-1 text-sm text-muted-foreground">
-          Voting has closed for GW{state.gameweek}. The first match has already started. Voting for the next gameweek will open here.
+          Voting has closed for GW{state.gameweek}. It closes 24 hours before first kickoff. Voting for the next gameweek will open here.
         </p>
       )}
     </div>

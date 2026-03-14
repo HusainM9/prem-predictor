@@ -72,7 +72,7 @@ export default function PlayPage() {
   >([]);
   /** 0 = current gameweek settled, 1 = previous gameweek. */
   const [settledGameweekOffset, setSettledGameweekOffset] = useState(0);
-  /** Fixture id that won the last game-of-the-week vote (used for highlight). */
+  /** Fixture id that won the last game-of-the-week vote . */
   const [matchOfTheWeekFixtureId, setMatchOfTheWeekFixtureId] = useState<string | null>(null);
 
   /** Convert predicted score to outcome. H = home win, A = away win, D = draw. */
@@ -505,6 +505,8 @@ export default function PlayPage() {
                         oddsForPick != null
                           ? potentialPoints(oddsForPick)
                           : { resultPoints: 0, exactScoreBonus: 0, wrongLoss: -10 };
+                      const correctPointsWithGotw = isMatchOfTheWeek ? resultPoints + 15 : resultPoints;
+                      const exactScoreBonusWithGotw = isMatchOfTheWeek ? exactScoreBonus + 15 : exactScoreBonus;
 
                       const saved = alreadySavedFixtureIds.has(f.id);
                       const lastSaved = lastSavedScores[f.id];
@@ -613,7 +615,9 @@ export default function PlayPage() {
                           {/* Potential points */}
                           {valid && pick && oddsH != null && oddsD != null && oddsA != null && (
                             <p className="mt-2 text-center text-sm text-muted-foreground">
-                              Correct: {resultPoints} pts · Exact: +{exactScoreBonus} · Wrong: {wrongLoss}
+                              Correct: {correctPointsWithGotw} pts
+                              {isMatchOfTheWeek ? " (GOTW Bonus +15)" : ""}
+                              {" · "}Exact: +{exactScoreBonusWithGotw} · Wrong: {wrongLoss}
                               {valid && pick && ` · ${hg}–${ag} (${pick === "H" ? "Home" : pick === "A" ? "Away" : "Draw"})`}
                             </p>
                           )}

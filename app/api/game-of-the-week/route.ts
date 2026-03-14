@@ -4,38 +4,33 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const DEFAULT_SEASON = "2025/26";
 
-async function getLastVoteWinner(
+async function getWinnerForGameweek(
   supabase: SupabaseClient,
-  season: string
+  season: string,
+  gameweek: number
 ): Promise<{ gameweek: number; fixture_id: string; home_team: string; away_team: string } | null> {
-  const nowIso = new Date().toISOString();
-  const { data: lastFixture } = await supabase
-    .from("fixtures")
-    .select("gameweek, kickoff_time")
-    .eq("season", season)
-    .lte("kickoff_time", nowIso)
-    .order("kickoff_time", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!lastFixture?.gameweek) return null;
-  const closedGw = lastFixture.gameweek as number;
   const { data: gwFixtures } = await supabase
     .from("fixtures")
-    .select("kickoff_time")
+    .select("id, kickoff_time")
     .eq("season", season)
-    .eq("gameweek", closedGw)
+    .eq("gameweek", gameweek)
     .order("kickoff_time", { ascending: true });
   const firstKickoff = (gwFixtures ?? [])[0]?.kickoff_time ?? null;
   if (!firstKickoff) return null;
+  const closingIso = new Date(new Date(firstKickoff).getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+  const fixtureIds = new Set((gwFixtures ?? []).map((f: { id: string }) => f.id));
   const { data: votes } = await supabase
     .from("game_of_the_week_votes")
     .select("fixture_id")
     .eq("season", season)
-    .eq("gameweek", closedGw)
-    .lt("created_at", firstKickoff);
+    .eq("gameweek", gameweek)
+    .lt("created_at", closingIso);
   if (!votes?.length) return null;
+
   const countByFixture = new Map<string, number>();
   for (const v of votes as { fixture_id: string }[]) {
+    if (!fixtureIds.has(v.fixture_id)) continue;
     countByFixture.set(v.fixture_id, (countByFixture.get(v.fixture_id) ?? 0) + 1);
   }
   let winnerId: string | null = null;
@@ -54,16 +49,33 @@ async function getLastVoteWinner(
     .maybeSingle();
   if (!fixture) return null;
   return {
-    gameweek: closedGw,
+    gameweek,
     fixture_id: fixture.id,
     home_team: (fixture as { home_team: string }).home_team,
     away_team: (fixture as { away_team: string }).away_team,
   };
 }
 
+async function getLastVoteWinner(
+  supabase: SupabaseClient,
+  season: string
+): Promise<{ gameweek: number; fixture_id: string; home_team: string; away_team: string } | null> {
+  const nowIso = new Date().toISOString();
+  const { data: lastFixture } = await supabase
+    .from("fixtures")
+    .select("gameweek, kickoff_time")
+    .eq("season", season)
+    .lte("kickoff_time", nowIso)
+    .order("kickoff_time", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!lastFixture?.gameweek) return null;
+  const closedGw = lastFixture.gameweek as number;
+  return getWinnerForGameweek(supabase, season, closedGw);
+}
+
 /**
- * GET: Fixtures for the given gameweek (or current), whether voting is open, and the current user's vote.
- * Query: ?gameweek=26&season=2025/26
+ * Fixtures for the given gameweek, whether voting is open, and the current user's vote.
  */
 export async function GET(req: Request) {
   try {
@@ -150,6 +162,10 @@ export async function GET(req: Request) {
       .maybeSingle();
 
     const last_vote_winner = await getLastVoteWinner(supabase, season);
+    const current_vote_winner =
+      firstKickoff != null && Date.now() >= new Date(firstKickoff).getTime() - 24 * 60 * 60 * 1000
+        ? await getWinnerForGameweek(supabase, season, gameweek)
+        : null;
 
     return NextResponse.json({
       voting_open,
@@ -163,6 +179,7 @@ export async function GET(req: Request) {
       my_vote_fixture_id: (myVote as { fixture_id?: string } | null)?.fixture_id ?? null,
       gameweek,
       season,
+      current_vote_winner,
       last_vote_winner,
     });
   } catch (err: unknown) {
