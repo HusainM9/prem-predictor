@@ -137,23 +137,22 @@ export function DashboardPage({ onLogout }: { onLogout: () => void }) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return []
     setUserId(user.id)
-    const { data: members } = await supabase
-      .from("league_members")
-      .select("league_id, joined_at")
-      .eq("user_id", user.id)
-      .order("joined_at", { ascending: true })
-    if (!members?.length) return []
-    const leagueIds = members.map((m) => m.league_id)
-    const { data: leagueRows } = await supabase
-      .from("leagues")
-      .select("id, name")
-      .in("id", leagueIds)
-    const byId = new Map((leagueRows ?? []).map((l) => [l.id, l]))
-    const ordered = leagueIds
-      .map((id) => byId.get(id))
-      .filter(Boolean) as LeagueRow[]
-    setLeagues(ordered)
-    return ordered
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) return []
+    const res = await fetch("/api/leagues", {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    })
+    if (!res.ok) {
+      setLeagues([])
+      return []
+    }
+    const data = await res.json()
+    const rows: LeagueRow[] = (data.leagues ?? []).map((l: { id: string; name: string }) => ({
+      id: l.id,
+      name: l.name,
+    }))
+    setLeagues(rows)
+    return rows
   }, [])
 
   const loadLeaderboard = useCallback(

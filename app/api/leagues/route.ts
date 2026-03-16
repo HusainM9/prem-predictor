@@ -40,6 +40,24 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Missing SUPABASE_SERVICE_ROLE_KEY" }, { status: 500 });
     }
     const supabase = createClient(supabaseUrl, serviceKey);
+    const globalLeagueId = process.env.GLOBAL_LEAGUE_ID ?? process.env.NEXT_PUBLIC_GLOBAL_LEAGUE_ID ?? null;
+
+    // Best-effort: ensure every authenticated user is in the global league.
+    if (globalLeagueId) {
+      const { data: existingGlobal } = await supabase
+        .from("league_members")
+        .select("user_id")
+        .eq("league_id", globalLeagueId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!existingGlobal) {
+        await supabase.from("league_members").insert({
+          league_id: globalLeagueId,
+          user_id: user.id,
+          role: "member",
+        });
+      }
+    }
 
     const { data: members, error: memErr } = await supabase
       .from("league_members")
@@ -226,15 +244,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    let inviteCode = generateInviteCode();
+    let inviteCode = generateInviteCode().toUpperCase();
     for (let attempt = 0; attempt < 20; attempt++) {
       const { data: existing } = await supabase
         .from("leagues")
         .select("id")
-        .eq("invite_code", inviteCode)
+        .ilike("invite_code", inviteCode)
         .maybeSingle();
       if (!existing) break;
-      inviteCode = generateInviteCode();
+      inviteCode = generateInviteCode().toUpperCase();
     }
 
     const { data: league, error: leagueErr } = await supabase

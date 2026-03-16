@@ -28,16 +28,25 @@ export async function POST(req: Request) {
     const supabase = createClient(supabaseUrl, serviceKey);
 
     const body = await req.json();
-    const code = typeof body.code === "string" ? body.code.trim() : "";
-    if (!code || code.length !== 6 || !isValidInviteCodeFormat(code)) {
+    const code = typeof body.code === "string" ? body.code.trim().toUpperCase() : "";
+    const globalLeagueId = process.env.GLOBAL_LEAGUE_ID ?? process.env.NEXT_PUBLIC_GLOBAL_LEAGUE_ID ?? null;
+    const isGlobalShortcut = code === "GLOBAL";
+
+    if (!code || code.length !== 6 || (!isGlobalShortcut && !isValidInviteCodeFormat(code))) {
       return NextResponse.json({ error: "Please enter the 6-character invite code" }, { status: 400 });
     }
 
-    const { data: league, error: leagueErr } = await supabase
-      .from("leagues")
-      .select("id, name")
-      .eq("invite_code", code)
-      .maybeSingle();
+    const { data: league, error: leagueErr } = isGlobalShortcut
+      ? await supabase
+          .from("leagues")
+          .select("id, name")
+          .eq("id", globalLeagueId ?? "")
+          .maybeSingle()
+      : await supabase
+          .from("leagues")
+          .select("id, name")
+          .ilike("invite_code", code)
+          .maybeSingle();
 
     if (leagueErr || !league) {
       return NextResponse.json({ error: "Invalid or expired invite code" }, { status: 404 });
