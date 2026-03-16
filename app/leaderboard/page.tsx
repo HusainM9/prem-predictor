@@ -173,6 +173,7 @@ function LeaderboardContent() {
   const gameweekOptions = currentGameweek != null
     ? Array.from({ length: currentGameweek }, (_, i) => i + 1)
     : [];
+  const isCurrentGwView = effectiveGameweek != null && currentGameweek != null && effectiveGameweek === currentGameweek;
 
   return (
     <main className="mx-auto max-w-[640px] p-6 max-sm:px-3 max-sm:py-4 sm:p-6">
@@ -262,6 +263,11 @@ function LeaderboardContent() {
       </label>
 
       {err && <p style={{ color: "crimson", marginBottom: 12 }}>Error: {err}</p>}
+      {isCurrentGwView && (
+        <p style={{ marginBottom: 12, fontSize: 13, opacity: 0.85 }}>
+          Current gameweek points may still be settling. Final scores appear after the settlement job runs.
+        </p>
+      )}
       <LeaderboardTable
         entries={entries}
         currentUserId={currentUserId}

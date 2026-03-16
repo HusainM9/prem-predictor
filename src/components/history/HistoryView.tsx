@@ -16,6 +16,7 @@ export type HistoryPrediction = {
   points_awarded: number;
   bonus_exact_score_points?: number;
   bonus_points?: number;
+  settled_at?: string | null;
   fixture: {
     home_team: string;
     away_team: string;
@@ -43,7 +44,8 @@ type Props = {
 
 const MAX_GW = 38;
 
-function outcomeType(p: HistoryPrediction): "exact" | "correct" | "wrong" {
+function outcomeType(p: HistoryPrediction): "exact" | "correct" | "wrong" | "pending" {
+  if (!p.settled_at) return "pending";
   const bonus = p.bonus_exact_score_points ?? p.bonus_points ?? 0;
   if (bonus > 0) return "exact";
   if ((p.points_awarded ?? 0) > 0) return "correct";
@@ -77,10 +79,11 @@ export function HistoryView({
   }, [selectedGameweek]);
 
   const exactCount = predictionsForGw.filter(
-    (p) => (p.bonus_exact_score_points ?? p.bonus_points ?? 0) > 0
+    (p) => !!p.settled_at && (p.bonus_exact_score_points ?? p.bonus_points ?? 0) > 0
   ).length;
-  const correctCount = predictionsForGw.filter((p) => (p.points_awarded ?? 0) > 0).length;
-  const wrongCount = predictionsForGw.filter((p) => (p.points_awarded ?? 0) < 0).length;
+  const correctCount = predictionsForGw.filter((p) => !!p.settled_at && (p.points_awarded ?? 0) > 0).length;
+  const wrongCount = predictionsForGw.filter((p) => !!p.settled_at && (p.points_awarded ?? 0) < 0).length;
+  const pendingCount = predictionsForGw.filter((p) => !p.settled_at).length;
 
   const maxGw = currentGameweek ?? MAX_GW;
   const gwNum = Math.max(1, Math.min(maxGw, selectedGameweek));
@@ -202,6 +205,11 @@ export function HistoryView({
             <p className="mt-0.5 text-[10px] text-muted-foreground uppercase tracking-wide max-sm:text-[10px] sm:text-xs">Wrong</p>
           </div>
         </div>
+        {pendingCount > 0 && (
+          <p className="mt-3 text-sm text-muted-foreground">
+            {pendingCount} fixture{pendingCount !== 1 ? "s are" : " is"} unscored and still settling.
+          </p>
+        )}
 
         {positionChange != null && positionChange !== 0 && (
           <p className="mt-3 text-sm text-primary flex items-center gap-1">
@@ -256,7 +264,7 @@ export function HistoryView({
               const bonus = p.bonus_exact_score_points ?? p.bonus_points ?? 0;
               const pts = (p.points_awarded ?? 0) + bonus;
               const borderColor =
-                type === "wrong" ? "border-l-destructive" : "border-l-primary";
+                type === "wrong" ? "border-l-destructive" : type === "pending" ? "border-l-muted" : "border-l-primary";
               return (
                 <li key={p.prediction_id}>
                   <div
@@ -284,8 +292,14 @@ export function HistoryView({
                               {p.fixture.away_team}
                             </span>
                           </div>
-                          <span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${type === "wrong" ? "bg-destructive/20 text-destructive" : "bg-primary/20 text-primary"}`}>
-                            {type === "wrong" ? pts : `+${pts}`}
+                          <span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${
+                            type === "wrong"
+                              ? "bg-destructive/20 text-destructive"
+                              : type === "pending"
+                                ? "bg-muted text-muted-foreground"
+                                : "bg-primary/20 text-primary"
+                          }`}>
+                            {type === "pending" ? "Unscored" : type === "wrong" ? pts : `+${pts}`}
                           </span>
                         </div>
                         <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 border-t border-border pt-2 max-sm:mt-2 max-sm:gap-1.5 max-sm:pt-2 sm:mt-3 sm:gap-2 sm:pt-3">
@@ -305,6 +319,11 @@ export function HistoryView({
                           {type === "wrong" && (
                             <span className="text-destructive text-sm font-medium flex items-center justify-center gap-1">
                               <span aria-hidden><FaXmark className="text-red-500 text-xxl" /></span> Wrong ({p.points_awarded ?? 0} pts)
+                            </span>
+                          )}
+                          {type === "pending" && (
+                            <span className="text-muted-foreground text-sm font-medium">
+                              Settling in progress (points not final yet)
                             </span>
                           )}
                         </div>

@@ -260,7 +260,8 @@ export default function PlayPage() {
         if (cancelled || !res.ok) return;
         const list = Array.isArray(data.predictions) ? data.predictions : [];
         const settled = list.filter(
-          (p: { fixture?: { home_goals?: number | null; away_goals?: number | null } }) =>
+          (p: { settled_at?: string | null; fixture?: { home_goals?: number | null; away_goals?: number | null } }) =>
+            p.settled_at != null &&
             p.fixture != null &&
             (p.fixture.home_goals != null || p.fixture.away_goals != null)
         );
