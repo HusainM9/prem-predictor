@@ -5,10 +5,6 @@
       "schedule": "0 9 * * *"
     },
     {
-      "path": "/api/cron/score-gameweek",
-      "schedule": "30 23 * * *"
-    },
-    {
       "path": "/api/cron/score-bonuses",
       "schedule": "30 2 * * *"
     }

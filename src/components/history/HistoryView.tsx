@@ -207,7 +207,7 @@ export function HistoryView({
         </div>
         {pendingCount > 0 && (
           <p className="mt-3 text-sm text-muted-foreground">
-            {pendingCount} fixture{pendingCount !== 1 ? "s are" : " is"} unscored and still settling.
+            {pendingCount} fixture{pendingCount !== 1 ? "s are" : " is"} unscored and still settling. Scores are applied after all matches finish and at least 1 hour passes from the final provider update.
           </p>
         )}
 

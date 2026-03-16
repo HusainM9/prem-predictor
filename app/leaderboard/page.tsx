@@ -265,7 +265,7 @@ function LeaderboardContent() {
       {err && <p style={{ color: "crimson", marginBottom: 12 }}>Error: {err}</p>}
       {isCurrentGwView && (
         <p style={{ marginBottom: 12, fontSize: 13, opacity: 0.85 }}>
-          Current gameweek points may still be settling. Final scores appear after the settlement job runs.
+          Current gameweek points may still be settling. Scores update after all matches finish and at least 1 hour passes from the last provider update (nightly settlement run).
         </p>
       )}
       <LeaderboardTable

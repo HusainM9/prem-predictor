@@ -2,14 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const DEFAULT_SEASON = "2025/26";
-const ONE_HOUR_MS = 60 * 60 * 1000;
-
-type DayFixture = {
-  gameweek: number;
-  kickoff_time: string;
-  status: string;
-  provider_last_updated: string | null;
-};
+const LOOKBACK_HOURS = 72;
 
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
@@ -38,65 +31,31 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const season = searchParams.get("season") ?? DEFAULT_SEASON;
   const now = new Date();
-  const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const nextDayStart = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  const sinceIso = new Date(now.getTime() - LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
+  const nowIso = now.toISOString();
 
-  const { data: todaysFixtures, error: dayErr } = await supabase
+  const { data: recentFixtures, error: recentErr } = await supabase
     .from("fixtures")
-    .select("gameweek, kickoff_time, status, provider_last_updated")
+    .select("gameweek")
     .eq("season", season)
-    .gte("kickoff_time", dayStart.toISOString())
-    .lt("kickoff_time", nextDayStart.toISOString());
+    .gte("kickoff_time", sinceIso)
+    .lte("kickoff_time", nowIso);
 
-  if (dayErr) {
-    return NextResponse.json({ error: "Failed loading today's fixtures", details: dayErr.message }, { status: 500 });
+  if (recentErr) {
+    return NextResponse.json({ error: "Failed loading recent fixtures", details: recentErr.message }, { status: 500 });
   }
 
-  const list = (todaysFixtures ?? []) as DayFixture[];
-  if (list.length === 0) {
+  const gameweeks = [...new Set((recentFixtures ?? []).map((f) => f.gameweek as number))]
+    .filter((gw) => Number.isInteger(gw) && gw >= 1)
+    .sort((a, b) => b - a);
+
+  if (gameweeks.length === 0) {
     return NextResponse.json({
       success: true,
       skipped: true,
-      reason: "no_games_today",
+      reason: "no_recent_fixtures",
       season,
-      day_start_utc: dayStart.toISOString(),
-    });
-  }
-
-  const allFinishedToday = list.every((f) => f.status === "finished");
-  if (!allFinishedToday) {
-    return NextResponse.json({
-      success: true,
-      skipped: true,
-      reason: "day_matches_not_finished_yet",
-      season,
-      day_start_utc: dayStart.toISOString(),
-    });
-  }
-
-  const finishedTimestamps = list.map((f) => f.provider_last_updated).filter((v): v is string => !!v);
-  if (finishedTimestamps.length !== list.length) {
-    return NextResponse.json({
-      success: true,
-      skipped: true,
-      reason: "missing_finished_timestamps",
-      season,
-      day_start_utc: dayStart.toISOString(),
-    });
-  }
-
-  const lastFinishedMs = finishedTimestamps.reduce((max, iso) => {
-    const ms = new Date(iso).getTime();
-    return ms > max ? ms : max;
-  }, 0);
-  const earliestRunMs = lastFinishedMs + ONE_HOUR_MS;
-  if (Date.now() < earliestRunMs) {
-    return NextResponse.json({
-      success: true,
-      skipped: true,
-      reason: "too_early_after_last_finished_match",
-      season,
-      earliest_run_at: new Date(earliestRunMs).toISOString(),
+      lookback_hours: LOOKBACK_HOURS,
     });
   }
 
@@ -104,7 +63,6 @@ export async function GET(req: Request) {
     ? `https://${process.env.VERCEL_URL}`
     : process.env.APP_URL || "http://localhost:3000";
 
-  const gameweeks = [...new Set(list.map((f) => f.gameweek))].sort((a, b) => a - b);
   const results: Array<{
     gameweek: number;
     scored: boolean;
@@ -136,7 +94,7 @@ export async function GET(req: Request) {
     {
       success: allOk,
       season,
-      day_start_utc: dayStart.toISOString(),
+      lookback_hours: LOOKBACK_HOURS,
       results,
     },
     { status: allOk ? 200 : 207 }
