@@ -91,6 +91,24 @@ export async function PATCH(req: Request) {
         return NextResponse.json({ error: validation.error }, { status: 400 });
       }
 
+      // Enforce unique display names (case-insensitive) across users.
+      const { data: existingName, error: existingNameErr } = await supabase
+        .from("profiles")
+        .select("id")
+        .ilike("display_name", trimmed)
+        .neq("id", user.id)
+        .limit(1)
+        .maybeSingle();
+      if (existingNameErr) {
+        return NextResponse.json({ error: existingNameErr.message }, { status: 500 });
+      }
+      if (existingName) {
+        return NextResponse.json(
+          { error: "This display name is already taken. Please choose another." },
+          { status: 409 }
+        );
+      }
+
       const { data: profile } = await supabase
         .from("profiles")
         .select("display_name_changed_at")

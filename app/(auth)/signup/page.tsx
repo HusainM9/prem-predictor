@@ -31,16 +31,44 @@ export default function SignupPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     const trimmed = displayName.trim()
+    const normalizedEmail = email.trim().toLowerCase()
     const validation = validateDisplayName(trimmed)
     if (!validation.valid) {
       setMsg(validation.error ?? "Invalid display name")
       return
     }
+    if (!normalizedEmail) {
+      setMsg("Email is required")
+      return
+    }
     setLoading(true)
     setMsg(null)
 
+    // Pre-check so users get clear guidance before we attempt sign up.
+    try {
+      const checkRes = await fetch("/api/auth/signup-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail, displayName: trimmed }),
+      })
+      if (checkRes.ok) {
+        const check = await checkRes.json()
+        if (check.emailExists || check.displayNameTaken) {
+          const parts: string[] = []
+          if (check.emailExists) parts.push("This email already has an account.")
+          if (check.displayNameTaken) parts.push("This display name is already taken.")
+          parts.push("Try logging in or use different details.")
+          setMsg(parts.join(" "))
+          setLoading(false)
+          return
+        }
+      }
+    } catch {
+      // Non-blocking: if this check fails, continue with sign-up attempt.
+    }
+
     const { error } = await supabase.auth.signUp({
-      email,
+      email: normalizedEmail,
       password,
       options: {
         data: { display_name: trimmed },
@@ -50,9 +78,15 @@ export default function SignupPage() {
 
     setLoading(false)
 
-    if (error) return setMsg(error.message)
+    if (error) {
+      const lower = error.message.toLowerCase()
+      if (lower.includes("already registered") || lower.includes("already exists")) {
+        return setMsg("This email already has an account. Try logging in instead.")
+      }
+      return setMsg(error.message)
+    }
 
-    setPendingEmail(email.trim())
+    setPendingEmail(normalizedEmail)
     setPendingPassword(password)
     setAwaitingConfirmation(true)
     setMsg("Check your inbox and confirm your email, then click the button below to log in.")
@@ -112,7 +146,7 @@ export default function SignupPage() {
                 disabled={loading}
                 onClick={onConfirmedLogin}
               >
-                {loading ? "Checking confirmation…" : "I confirmed my email — Log me in"}
+                {loading ? "Checking confirmation…" : "I confirmed my email, log me in"}
               </Button>
               <p className="text-center text-sm text-muted-foreground">
                 Already confirmed?{" "}
