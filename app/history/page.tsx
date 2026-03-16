@@ -4,11 +4,11 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import { sumTotalPointsFromByGameweek } from "@/lib/history";
-import { HistoryView, type HistoryPrediction } from "@/components/history/HistoryView";
+import { HistoryView, type GameweekBonus, type HistoryPrediction } from "@/components/history/HistoryView";
 
 type ByGameweek = Record<
   string,
-  { predictions: HistoryPrediction[]; total_points: number }
+  { predictions: HistoryPrediction[]; total_points: number; bonuses?: GameweekBonus[] }
 >;
 
 export default function HistoryPage() {

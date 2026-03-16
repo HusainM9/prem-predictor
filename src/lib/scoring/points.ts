@@ -50,8 +50,7 @@ function normalizePick(pick: string | null | undefined): Pick {
 }
 
 /** Compute points for one prediction given the actual fixture result.
- * Correct result 10×odds + exact score bonus. Wrong lose stake (-10).
- * Optionally add game-of-the-week bonus when correct.
+ * Correct result 10×odds + exact score bonus. Wrong -10.
  */
 export function scorePrediction(
   prediction: PredictionRow,

@@ -38,7 +38,6 @@ type Props = {
   predictionsForGw: HistoryPrediction[];
   gameweekPoints: number;
   positionChange?: number | null;
-  /** Bonuses earned in this gameweek (underdog_win, correct_7, all_correct, exact_4). */
   bonusesForGw?: GameweekBonus[];
 };
 

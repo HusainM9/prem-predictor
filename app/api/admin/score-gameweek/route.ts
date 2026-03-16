@@ -21,8 +21,8 @@ type FixtureRow = {
 
 /**
  * Settles all unsettled predictions for finished fixtures in the given gameweek.
- * Applies: correct = 10×odds + exact bonus; wrong = -10; game-of-the-week correct +15.
- * After settling: 7+ correct +10, all correct +50, 4+ exact +10.
+ * correct = 10×odds + exact bonus; wrong = -10; game-of-the-week correct +15.
+ * 7+ correct - +10, all correct - +50, 4+ exact - +10.
  */
 export async function POST(req: Request) {
   const unauthorized = requireAdmin(req);
@@ -87,7 +87,6 @@ export async function POST(req: Request) {
 
     const fixtureIds = fixtures.map((f: { id: string }) => f.id);
     if (resetOnly) {
-      // Reset all global predictions and bonuses for this gameweek so scoring can be re-run with new rules.
       await supabase
         .from("predictions")
         .update({
@@ -121,7 +120,7 @@ export async function POST(req: Request) {
     const kickoffMs = new Date(firstKickoff).getTime();
     const closingIso = new Date(kickoffMs - 24 * 60 * 60 * 1000).toISOString();
 
-    // Game of the week: fixture with most votes where vote was before voting close (24h before first kickoff)
+    // Game of the week: fixture with most votes where vote was before voting close 
     let gameOfTheWeekFixtureId: string | null = null;
     const { data: votes } = await supabase
       .from("game_of_the_week_votes")

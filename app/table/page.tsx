@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getStandings, type StandingsData } from "@/lib/standings";
 
-export const revalidate = 60 * 60;
+export const revalidate = 3600;
 
 type TableRow = {
   position: number;

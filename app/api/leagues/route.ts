@@ -129,7 +129,6 @@ export async function GET(req: Request) {
       const filtered = allPreds.filter((r) => memberIds.has(r.user_id));
       let sorted = aggregatePointsByUser(filtered);
 
-      // Include user_gameweek_bonuses in totals for league members
       const leagueUserIds = sorted.map((e) => e.user_id);
       if (leagueUserIds.length > 0) {
         const { data: bonusRows } = await supabase
