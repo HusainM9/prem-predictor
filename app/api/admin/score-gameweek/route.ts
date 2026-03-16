@@ -9,6 +9,7 @@ const GAME_OF_THE_WEEK_BONUS = 15;
 type FixtureRow = {
   id: string;
   kickoff_time: string;
+  status?: string;
   home_goals: number | null;
   away_goals: number | null;
   odds_home_current: number | null;
@@ -197,44 +198,55 @@ export async function POST(req: Request) {
       }
     }
 
-    // Gameweek bonuses: 7+ correct +10, all correct +50, 4+ exact +10
-    const { data: settledRows } = await supabase
-      .from("predictions")
-      .select("user_id, fixture_id, points_awarded, bonus_exact_score_points")
-      .in("fixture_id", fixtureIds)
-      .not("settled_at", "is", null);
+    // Only apply gameweek-level bonuses once the whole gameweek is finished.
+    const { data: allGwFixtures, error: allGwErr } = await supabase
+      .from("fixtures")
+      .select("status")
+      .eq("season", season)
+      .eq("gameweek", gameweek);
+    const totalFixturesInGw = (allGwFixtures ?? []).length;
+    const finishedFixturesInGw = (allGwFixtures ?? []).filter((f: { status: string | null }) => f.status === "finished").length;
+    const gameweekComplete = !allGwErr && totalFixturesInGw > 0 && finishedFixturesInGw === totalFixturesInGw;
 
-    const numFixtures = fixtures.length;
+    let bonusInserts: { user_id: string; season: string; gameweek: number; bonus_type: string; points: number }[] = [];
+    if (gameweekComplete) {
+      const { data: settledRows } = await supabase
+        .from("predictions")
+        .select("user_id, fixture_id, points_awarded, bonus_exact_score_points")
+        .in("fixture_id", fixtureIds)
+        .not("settled_at", "is", null);
 
-    const bonusInserts: { user_id: string; season: string; gameweek: number; bonus_type: string; points: number }[] = [];
-    const userCorrect = new Map<string, number>();
-    const userExact = new Map<string, number>();
+      const numFixtures = fixtures.length;
+      const userCorrect = new Map<string, number>();
+      const userExact = new Map<string, number>();
 
-    for (const r of settledRows ?? []) {
-      const uid = r.user_id as string;
-      userCorrect.set(uid, (userCorrect.get(uid) ?? 0) + ((r.points_awarded ?? 0) > 0 ? 1 : 0));
-      userExact.set(uid, (userExact.get(uid) ?? 0) + ((r.bonus_exact_score_points ?? 0) > 0 ? 1 : 0));
-    }
-    for (const [uid, correctCount] of userCorrect) {
-      if (correctCount === numFixtures) {
-        bonusInserts.push({ user_id: uid, season, gameweek, bonus_type: "all_correct", points: 50 });
-      } else if (correctCount >= 7) {
-        bonusInserts.push({ user_id: uid, season, gameweek, bonus_type: "correct_7", points: 10 });
+      for (const r of settledRows ?? []) {
+        const uid = r.user_id as string;
+        userCorrect.set(uid, (userCorrect.get(uid) ?? 0) + ((r.points_awarded ?? 0) > 0 ? 1 : 0));
+        userExact.set(uid, (userExact.get(uid) ?? 0) + ((r.bonus_exact_score_points ?? 0) > 0 ? 1 : 0));
       }
-    }
-    for (const [uid, exactCount] of userExact) {
-      if (exactCount >= 4) {
-        bonusInserts.push({ user_id: uid, season, gameweek, bonus_type: "exact_4", points: 10 });
+      for (const [uid, correctCount] of userCorrect) {
+        if (correctCount === numFixtures) {
+          bonusInserts.push({ user_id: uid, season, gameweek, bonus_type: "all_correct", points: 50 });
+        } else if (correctCount >= 7) {
+          bonusInserts.push({ user_id: uid, season, gameweek, bonus_type: "correct_7", points: 10 });
+        }
       }
-    }
+      for (const [uid, exactCount] of userExact) {
+        if (exactCount >= 4) {
+          bonusInserts.push({ user_id: uid, season, gameweek, bonus_type: "exact_4", points: 10 });
+        }
+      }
 
-    if (bonusInserts.length > 0) {
+      // Replace existing gameweek bonuses to keep re-runs deterministic.
       await supabase
         .from("user_gameweek_bonuses")
         .delete()
         .eq("season", season)
         .eq("gameweek", gameweek);
-      await supabase.from("user_gameweek_bonuses").insert(bonusInserts);
+      if (bonusInserts.length > 0) {
+        await supabase.from("user_gameweek_bonuses").insert(bonusInserts);
+      }
     }
 
     return NextResponse.json({
@@ -244,6 +256,8 @@ export async function POST(req: Request) {
       fixtures_processed: fixtures.length,
       predictions_settled: totalSettled,
       game_of_the_week_fixture_id: gameOfTheWeekFixtureId,
+      gameweek_complete: gameweekComplete,
+      gameweek_bonuses_deferred: !gameweekComplete,
       gameweek_bonuses_applied: bonusInserts.length,
     });
   } catch (err: unknown) {

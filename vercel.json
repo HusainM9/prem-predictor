@@ -2,11 +2,15 @@
   "crons": [
     {
       "path": "/api/cron/odds",
-      "schedule": "0 * * * *"
+      "schedule": "0 9 * * *"
     },
     {
-      "path": "/api/cron/sync-results",
-      "schedule": "*/15 * * * *"
+      "path": "/api/cron/score-gameweek",
+      "schedule": "30 23 * * *"
+    },
+    {
+      "path": "/api/cron/score-bonuses",
+      "schedule": "30 2 * * *"
     }
   ]
 }
