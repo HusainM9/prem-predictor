@@ -277,11 +277,7 @@ export async function GET(req: Request) {
       return {
         homeTeam: { name: f.home_team, shortName: f.home_team.slice(0, 3).toUpperCase() },
         awayTeam: { name: f.away_team, shortName: f.away_team.slice(0, 3).toUpperCase() },
-        kickoff: new Date(f.kickoff_time).toLocaleDateString("en-GB", {
-          weekday: "long",
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
+        kickoff_time: f.kickoff_time,
         predicted: !!pred,
         prediction: pred ?? undefined,
       };

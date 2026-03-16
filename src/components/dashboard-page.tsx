@@ -30,8 +30,18 @@ type UpcomingFixture = {
   homeTeam: { name: string; shortName: string }
   awayTeam: { name: string; shortName: string }
   kickoff: string
+  kickoff_time?: string
   predicted?: boolean
   prediction?: { home: number; away: number }
+}
+
+function formatKickoffLocal(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleDateString("en-GB", {
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
 }
 
 function DashboardSkeleton() {
@@ -138,7 +148,32 @@ export function DashboardPage({ onLogout }: { onLogout: () => void }) {
       setRank(data.rank ?? null)
       setPoints(data.points ?? null)
       setLastGwChange(data.last_gw_change ?? null)
-      setUpcomingFixtures(Array.isArray(data.upcoming_fixtures) ? data.upcoming_fixtures : [])
+      const mappedUpcoming: UpcomingFixture[] = Array.isArray(data.upcoming_fixtures)
+        ? data.upcoming_fixtures.map((f: {
+            homeTeam?: { name?: string; shortName?: string }
+            awayTeam?: { name?: string; shortName?: string }
+            kickoff?: string
+            kickoff_time?: string
+            predicted?: boolean
+            prediction?: { home: number; away: number }
+          }) => ({
+            homeTeam: {
+              name: f.homeTeam?.name ?? "",
+              shortName: f.homeTeam?.shortName ?? "",
+            },
+            awayTeam: {
+              name: f.awayTeam?.name ?? "",
+              shortName: f.awayTeam?.shortName ?? "",
+            },
+            kickoff_time: f.kickoff_time,
+            kickoff: f.kickoff_time
+              ? formatKickoffLocal(f.kickoff_time)
+              : (f.kickoff ?? ""),
+            predicted: f.predicted ?? false,
+            prediction: f.prediction,
+          }))
+        : []
+      setUpcomingFixtures(mappedUpcoming)
       if (!cancelled) setIsLoading(false)
     }
     run()
