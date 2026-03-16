@@ -27,7 +27,7 @@ export type StandingsData = {
 };
 
 export type StandingsResult =
-  | { data: StandingsData; error?: undefined }
+  | { data: StandingsData; error?: undefined; stale?: boolean }
   | { data?: undefined; error: string; status?: number };
 
 /** Fetches Premier League standings from Football-Data.org */
@@ -37,13 +37,31 @@ export async function getStandings(): Promise<StandingsResult> {
     return { error: "FOOTBALL_DATA_API_KEY not set", status: 500 };
   }
 
-  const res = await fetch("https://api.football-data.org/v4/competitions/PL/standings", {
+  const url = "https://api.football-data.org/v4/competitions/PL/standings";
+  const res = await fetch(url, {
     headers: { "X-Auth-Token": token },
     next: { revalidate: STANDINGS_REVALIDATE_SEC, tags: [STANDINGS_CACHE_TAG] },
   });
   const text = await res.text();
 
   if (!res.ok) {
+    // Fallback: if provider is rate-limiting now, try to serve the last cached snapshot.
+    if (res.status === 429) {
+      const cachedRes = await fetch(url, {
+        headers: { "X-Auth-Token": token },
+        cache: "force-cache",
+      });
+      if (cachedRes.ok) {
+        const cachedText = await cachedRes.text();
+        try {
+          const cachedData = JSON.parse(cachedText) as StandingsData;
+          return { data: cachedData, stale: true };
+        } catch {
+          // Continue to normal error handling if cached payload can't be parsed.
+        }
+      }
+    }
+
     let message = "Standings request failed";
     if (res.status === 429) {
       message = "Data provider rate limit (429). Try again in a minute.";
@@ -62,5 +80,5 @@ export async function getStandings(): Promise<StandingsResult> {
   }
 
   const data = JSON.parse(text) as StandingsData;
-  return { data };
+  return { data, stale: false };
 }

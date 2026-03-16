@@ -34,6 +34,7 @@ export default async function TablePage() {
   }
 
   const data = result.data as StandingsData;
+  const stale = "stale" in result ? !!result.stale : false;
   const totalStanding = data?.standings?.find((s) => s.type === "TOTAL");
   const rows: TableRow[] = totalStanding?.table ?? [];
   const compName = data?.competition?.name ?? "Premier League";
@@ -53,6 +54,11 @@ export default async function TablePage() {
         <p className="mb-4 text-xs text-muted-foreground max-sm:mb-4 max-sm:text-xs sm:mb-6 sm:text-sm">
           League table · updated hourly
         </p>
+        {stale && (
+          <p className="mb-4 text-xs text-muted-foreground max-sm:mb-4 max-sm:text-xs sm:mb-6 sm:text-sm">
+            Showing last cached table because the live provider is temporarily rate-limited.
+          </p>
+        )}
 
         <div className="rounded-lg border border-border bg-card overflow-hidden max-sm:rounded-md">
           <div className="overflow-x-auto -mx-px">
