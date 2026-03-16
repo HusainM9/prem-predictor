@@ -132,6 +132,7 @@ export default function PlayPage() {
       setErr(null);
 
       const nowIso = new Date().toISOString();
+      const sessionPromise = supabase.auth.getSession();
 
       const { data: gwRow, error: gwErr } = await supabase
         .from("fixtures")
@@ -196,8 +197,9 @@ export default function PlayPage() {
       }
       combined.sort((a, b) => a.kickoff_time.localeCompare(b.kickoff_time));
       setFixtures(combined);
+      setLoading(false);
 
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await sessionPromise;
       if (session?.access_token && combined.length > 0) {
         const fixtureIds = combined.map((f) => f.id).join(",");
         try {
@@ -229,8 +231,6 @@ export default function PlayPage() {
         } catch {
         }
       }
-
-      setLoading(false);
     }
 
     load();

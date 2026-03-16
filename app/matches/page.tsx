@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase/client";
 import { TeamDisplay } from "@/components/TeamDisplay";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -60,11 +59,6 @@ function displayStatus(f: Fixture): string {
 }
 
 const POLL_INTERVAL_MS = 2 * 60 * 1000;
-/** Don't switch to next gameweek until this long after the previous GW's last match has ended */
-const HOURS_AFTER_LAST_MATCH_BEFORE_NEXT_GW = 24;
-const MATCH_END_OFFSET_MS = 2 * 60 * 60 * 1000; // assume match ends ~2h after kickoff
-
-const SEASON = "2025/26";
 
 export default function MatchesPage() {
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
@@ -87,116 +81,34 @@ export default function MatchesPage() {
     } else {
       setRefreshing(true);
     }
-    const nowIso = new Date().toISOString();
-    const nowMs = Date.now();
-
-    const { data: nextRow } = await supabase
-      .from("fixtures")
-      .select("gameweek")
-      .eq("season", SEASON)
-      .eq("status", "scheduled")
-      .gte("kickoff_time", nowIso)
-      .order("kickoff_time", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    let nextGw = nextRow?.gameweek ?? null;
-    if (nextGw == null) {
-      const { data: lastRow } = await supabase
-        .from("fixtures")
-        .select("gameweek")
-        .eq("season", SEASON)
-        .order("gameweek", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      nextGw = lastRow?.gameweek ?? 1;
-    }
-
-    let computedCurrentGw = nextGw;
-    const prevGw = nextGw - 1;
-    if (prevGw >= 1) {
-      const { data: lastMatchPrevGw } = await supabase
-        .from("fixtures")
-        .select("kickoff_time, status")
-        .eq("season", SEASON)
-        .eq("gameweek", prevGw)
-        .order("kickoff_time", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (lastMatchPrevGw) {
-        const lastKickoffMs = new Date(lastMatchPrevGw.kickoff_time).getTime();
-        const lastStatus = (lastMatchPrevGw.status ?? "").toLowerCase();
-        const lastMatchEndedMs = lastKickoffMs + MATCH_END_OFFSET_MS;
-        const cutoffMs = lastMatchEndedMs + HOURS_AFTER_LAST_MATCH_BEFORE_NEXT_GW * 60 * 60 * 1000;
-
-        if (lastStatus !== "finished") {
-          computedCurrentGw = prevGw;
-        } else if (nowMs < cutoffMs) {
-          computedCurrentGw = prevGw;
-        }
+    try {
+      const requestedTarget =
+        targetGw != null
+          ? targetGw
+          : isInitial
+            ? null
+            : gwRef.current ?? null;
+      const query = requestedTarget != null ? `?targetGw=${requestedTarget}` : "";
+      const res = await fetch(`/api/matches/overview${query}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setErr(data.error ?? "Failed to load matches");
+        setFixtures([]);
+      } else {
+        setErr(null);
+        setFixtures(Array.isArray(data.fixtures) ? (data.fixtures as Fixture[]) : []);
+        setCurrentGw(data.current_gameweek ?? null);
+        setMinGw(data.min_gameweek ?? 1);
+        setGw(data.viewing_gameweek ?? null);
+        setLastUpdated(data.updated_at ? new Date(data.updated_at) : new Date());
       }
-    }
-    setCurrentGw(computedCurrentGw);
-
-    const { data: minRow } = await supabase
-      .from("fixtures")
-      .select("gameweek")
-      .eq("season", SEASON)
-      .order("gameweek", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    const minGwInDb = minRow?.gameweek ?? 1;
-    setMinGw(minGwInDb);
-
-    const viewingGw =
-      targetGw != null
-        ? Math.min(computedCurrentGw, Math.max(minGwInDb, targetGw))
-        : isInitial
-          ? computedCurrentGw
-          : gwRef.current ?? computedCurrentGw;
-    setGw(viewingGw);
-
-    const { data: gwFx, error: fxErr } = await supabase
-      .from("fixtures")
-      .select("id,kickoff_time,home_team,away_team,status,gameweek,home_goals,away_goals,is_stuck")
-      .eq("season", SEASON)
-      .eq("gameweek", viewingGw)
-      .order("kickoff_time", { ascending: true });
-
-    if (fxErr) {
-      setErr(fxErr.message);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
       setFixtures([]);
-    } else {
-      const gwList = ((gwFx ?? []) as Fixture[]).slice();
-      gwList.sort((a, b) => a.kickoff_time.localeCompare(b.kickoff_time));
-      const firstKickoff = gwList.length > 0 ? gwList[0].kickoff_time : null;
-      let extraList: Fixture[] = [];
-      if (firstKickoff) {
-        const { data: extraFx } = await supabase
-          .from("fixtures")
-          .select("id,kickoff_time,home_team,away_team,status,gameweek,home_goals,away_goals,is_stuck")
-          .eq("season", SEASON)
-          .lt("kickoff_time", firstKickoff)
-          .neq("status", "finished")
-          .order("kickoff_time", { ascending: true });
-        if (extraFx) extraList = (extraFx as Fixture[]).slice();
-      }
-
-      const seen = new Set(gwList.map((f) => f.id));
-      const combined = [...gwList];
-      for (const f of extraList) {
-        if (!seen.has(f.id)) {
-          seen.add(f.id);
-          combined.push(f);
-        }
-      }
-      combined.sort((a, b) => a.kickoff_time.localeCompare(b.kickoff_time));
-      setFixtures(combined);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-    setLastUpdated(new Date());
-    setLoading(false);
-    setRefreshing(false);
   }
 
   useEffect(() => {
