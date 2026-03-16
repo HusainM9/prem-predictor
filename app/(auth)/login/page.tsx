@@ -18,7 +18,7 @@ import {
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState("")
+  const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
   const [msg, setMsg] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -27,6 +27,25 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setMsg(null)
+
+    let email = identifier.trim().toLowerCase()
+    if (email && !email.includes("@")) {
+      try {
+        const resolveRes = await fetch("/api/auth/resolve-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier: identifier.trim() }),
+        })
+        if (resolveRes.ok) {
+          const data = await resolveRes.json()
+          if (typeof data.email === "string" && data.email.length > 0) {
+            email = data.email
+          }
+        }
+      } catch {
+        // Fall through to normal auth call; Supabase will return generic invalid-credentials error.
+      }
+    }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password })
 
@@ -45,23 +64,23 @@ export default function LoginPage() {
             Log in
           </CardTitle>
           <CardDescription className="text-muted-foreground">
-            Sign in with your email to access your leagues and predictions.
+            Sign in with your email or display name to access your leagues and predictions.
           </CardDescription>
         </CardHeader>
         <form onSubmit={onSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-foreground">
-                Email
+              <Label htmlFor="identifier" className="text-foreground">
+                Email or display name
               </Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="identifier"
+                type="text"
+                placeholder="you@example.com or your display name"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 required
-                autoComplete="email"
+                autoComplete="username"
                 className="bg-background border-border"
               />
             </div>

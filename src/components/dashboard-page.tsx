@@ -34,16 +34,6 @@ type UpcomingFixture = {
   prediction?: { home: number; away: number }
 }
 
-function getInitials(displayName: string): string {
-  return displayName
-    .trim()
-    .split(/\s+/)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2)
-}
-
 function DashboardSkeleton() {
   return (
     <div className="flex flex-col gap-6">
@@ -113,195 +103,47 @@ export function DashboardPage({ onLogout }: { onLogout: () => void }) {
     ? leagueLeaderboards[currentLeague.id] ?? []
     : []
 
-  const loadNextKickoffAndGameweek = useCallback(async () => {
-    const nowIso = new Date().toISOString()
-    const { data, error } = await supabase
-      .from("fixtures")
-      .select("kickoff_time, gameweek")
-      .eq("season", "2025/26")
-      .eq("status", "scheduled")
-      .gte("kickoff_time", nowIso)
-      .order("kickoff_time", { ascending: true })
-      .limit(1)
-      .maybeSingle()
-    if (!error && data) {
-      setNextKickoff(new Date((data as { kickoff_time: string }).kickoff_time))
-      setCurrentGameweek((data as { gameweek: number }).gameweek ?? null)
-    } else {
-      setNextKickoff(null)
-      setCurrentGameweek(null)
-    }
-  }, [])
-
-  const loadLeagues = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return []
-    setUserId(user.id)
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.access_token) return []
-    const res = await fetch("/api/leagues", {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    })
-    if (!res.ok) {
-      setLeagues([])
-      return []
-    }
-    const data = await res.json()
-    const rows: LeagueRow[] = (data.leagues ?? []).map((l: { id: string; name: string }) => ({
-      id: l.id,
-      name: l.name,
-    }))
-    setLeagues(rows)
-    return rows
-  }, [])
-
-  const loadLeaderboard = useCallback(
-    async (leagueId: string | null): Promise<{ entries: LeaderboardEntryPreview[]; rank: number | null; points: number | null }> => {
-      const url = leagueId
-        ? `/api/leaderboard?leagueId=${encodeURIComponent(leagueId)}&limit=10`
-        : "/api/leaderboard?limit=10"
-      const res = await fetch(url)
-      if (!res.ok) return { entries: [], rank: null, points: null }
-      const data = await res.json()
-      const entries: LeaderboardEntryPreview[] = (data.entries ?? []).map(
-        (e: { rank: number; user_id: string; display_name: string; total_points: number }) => ({
-          rank: e.rank,
-          name: e.display_name ?? "Player",
-          initials: getInitials(e.display_name ?? "P"),
-          points: e.total_points,
-          change: 0,
-          isCurrentUser: e.user_id === userId,
-        })
-      )
-      const me = entries.find((e) => e.isCurrentUser)
-      return {
-        entries,
-        rank: me?.rank ?? null,
-        points: me?.points ?? null,
-      }
-    },
-    [userId]
-  )
-
-  const loadLastGwChange = useCallback(
-    async (leagueId: string | null) => {
-      if (currentGameweek == null || currentGameweek < 2 || !userId) return null
-      const gw = currentGameweek
-      const [curRes, prevRes] = await Promise.all([
-        fetch(
-          leagueId
-            ? `/api/leaderboard?leagueId=${encodeURIComponent(leagueId)}&gameweek=${gw}`
-            : `/api/leaderboard?gameweek=${gw}`
-        ),
-        fetch(
-          leagueId
-            ? `/api/leaderboard?leagueId=${encodeURIComponent(leagueId)}&gameweek=${gw - 1}`
-            : `/api/leaderboard?gameweek=${gw - 1}`
-        ),
-      ])
-      const curData = curRes.ok ? await curRes.json() : { entries: [] }
-      const prevData = prevRes.ok ? await prevRes.json() : { entries: [] }
-      const curEntry = (curData.entries ?? []).find((e: { user_id: string }) => e.user_id === userId)
-      const prevEntry = (prevData.entries ?? []).find((e: { user_id: string }) => e.user_id === userId)
-      if (prevEntry == null || curEntry == null) return null
-      return (prevEntry.rank as number) - (curEntry.rank as number)
-    },
-    [currentGameweek, userId]
-  )
-
-  const loadUpcomingFixtures = useCallback(async () => {
-    const nowIso = new Date().toISOString()
-    const { data: fx } = await supabase
-      .from("fixtures")
-      .select("id, kickoff_time, home_team, away_team, gameweek")
-      .eq("season", "2025/26")
-      .eq("status", "scheduled")
-      .gte("kickoff_time", nowIso)
-      .order("kickoff_time", { ascending: true })
-      .limit(3)
-    if (!fx?.length) {
-      setUpcomingFixtures([])
-      return
-    }
-    const { data: { session } } = await supabase.auth.getSession()
-    const predictedIds = new Set<string>()
-    const predictionByFixture: Record<string, { home: number; away: number }> = {}
-    if (session?.access_token) {
-      const fixtureIds = fx.map((f: { id: string }) => f.id).join(",")
-      const predRes = await fetch(
-        `/api/predictions/for-fixtures?fixtureIds=${encodeURIComponent(fixtureIds)}`,
-        { headers: { Authorization: `Bearer ${session.access_token}` } }
-      )
-      if (predRes.ok) {
-        const predData = await predRes.json()
-        const list = predData.predictions ?? []
-        for (const p of list) {
-          predictedIds.add(p.fixture_id)
-          if (p.pred_home_goals != null && p.pred_away_goals != null) {
-            predictionByFixture[p.fixture_id] = { home: p.pred_home_goals, away: p.pred_away_goals }
-          }
-        }
-      }
-    }
-    const formatKickoff = (iso: string) => {
-      const d = new Date(iso)
-      return d.toLocaleDateString("en-GB", {
-        weekday: "long",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    }
-    const list: UpcomingFixture[] = fx.map((f: { id: string; kickoff_time: string; home_team: string; away_team: string }) => {
-      const short = (s: string) => s.slice(0, 3).toUpperCase()
-      const pred = predictionByFixture[f.id]
-      return {
-        homeTeam: { name: f.home_team, shortName: short(f.home_team) },
-        awayTeam: { name: f.away_team, shortName: short(f.away_team) },
-        kickoff: formatKickoff(f.kickoff_time),
-        predicted: predictedIds.has(f.id),
-        prediction: pred,
-      }
-    })
-    setUpcomingFixtures(list)
-  }, [])
-
   useEffect(() => {
     let cancelled = false
     async function run() {
       setIsLoading(true)
-      await loadNextKickoffAndGameweek()
-      const userLeagues = await loadLeagues()
-      const { data: { user } } = await supabase.auth.getUser()
-      setUserId(user?.id ?? null)
-      if (cancelled) return
-      if (userLeagues.length > 0) {
-        const first = userLeagues[0]
-        const { rank: r, points: p, entries } = await loadLeaderboard(first.id)
-        if (!cancelled) {
-          setRank(r)
-          setPoints(p)
-          setLeagueLeaderboards((prev) => ({ ...prev, [first.id]: entries }))
-        }
-        const change = await loadLastGwChange(first.id)
-        if (!cancelled) setLastGwChange(change)
-        for (const league of userLeagues.slice(1, MAX_LEAGUE_TABS)) {
-          const { entries: e } = await loadLeaderboard(league.id)
-          if (!cancelled) setLeagueLeaderboards((prev) => ({ ...prev, [league.id]: e }))
-        }
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        if (!cancelled) setIsLoading(false)
+        return
       }
-      await loadUpcomingFixtures()
+      const res = await fetch("/api/dashboard", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
+      const data = await res.json().catch(() => ({}))
+      if (cancelled) return
+      if (!res.ok) {
+        setLeagues([])
+        setLeagueLeaderboards({})
+        setRank(null)
+        setPoints(null)
+        setLastGwChange(null)
+        setUpcomingFixtures([])
+        setCurrentGameweek(null)
+        setNextKickoff(null)
+        setUserId(null)
+        setIsLoading(false)
+        return
+      }
+      setUserId(data.user_id ?? null)
+      setNextKickoff(data.next_kickoff ? new Date(data.next_kickoff) : null)
+      setCurrentGameweek(data.current_gameweek ?? null)
+      setLeagues(Array.isArray(data.leagues) ? data.leagues : [])
+      setLeagueLeaderboards(data.league_leaderboards ?? {})
+      setRank(data.rank ?? null)
+      setPoints(data.points ?? null)
+      setLastGwChange(data.last_gw_change ?? null)
+      setUpcomingFixtures(Array.isArray(data.upcoming_fixtures) ? data.upcoming_fixtures : [])
       if (!cancelled) setIsLoading(false)
     }
     run()
     return () => { cancelled = true }
-  }, [loadNextKickoffAndGameweek, loadLeagues, loadLeaderboard, loadLastGwChange, loadUpcomingFixtures])
-
-  useEffect(() => {
-    if (!currentLeague || leagueLeaderboards[currentLeague.id]?.length) return
-    loadLeaderboard(currentLeague.id).then(({ entries }) => {
-      setLeagueLeaderboards((prev) => ({ ...prev, [currentLeague.id]: entries }))
-    })
-  }, [currentLeague?.id, leagueLeaderboards, loadLeaderboard])
+  }, [])
 
   const rankSuffix = (n: number) => {
     if (n >= 11 && n <= 13) return "th"
