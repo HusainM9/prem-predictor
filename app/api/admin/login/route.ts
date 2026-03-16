@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { COOKIE_NAME, createAdminSessionToken } from "@/lib/admin/requireAdmin";
 
 /**
- * POST body: { secret }
- * If secret matches ADMIN_SECRET, sets httpOnly cookie with a signed session token (secret is never stored in the cookie) and returns { ok: true }.
- * Session expires after 1 hour; you must re-enter the secret after that.
+ * Session expires after 1 hour, enter the secret after that.
  */
 export async function POST(req: Request) {
   const secret = process.env.ADMIN_SECRET?.trim();
@@ -25,7 +23,7 @@ export async function POST(req: Request) {
     path: "/",
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
-    maxAge: 60 * 60, // 1 hour (matches SESSION_MAX_AGE_MS)
+    maxAge: 60 * 60, // 1 hour 
   });
   return res;
 }

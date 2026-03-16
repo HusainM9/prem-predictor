@@ -6,6 +6,8 @@ const store = new Map<string, number[]>();
 const WINDOW_MS = 60 * 1000; // 1 minute
 const MAX_REQUESTS = 30;
 
+// Kept for potential future use (e.g. periodic cleanup)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function prune(key: string, now: number) {
   const timestamps = store.get(key) ?? [];
   const cutoff = now - WINDOW_MS;

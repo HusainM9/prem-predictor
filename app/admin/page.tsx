@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 type LogEntry = { time: string; action: string; ok: boolean; text: string };
 
-type FixtureOption = { id: string; home_team: string; away_team: string; status: string; home_goals: number | null; away_goals: number | null };
+type FixtureOption = { id: string; home_team: string; away_team: string; status: string; home_goals: number | null; away_goals: number | null; is_stuck?: boolean };
 
 function SetResultForm({
   run,
@@ -214,6 +214,9 @@ function isoDate(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
+const SEASON_2025_26_START = "2025-08-01";
+const SEASON_2025_26_END = "2026-05-31";
+
 function ImportFixturesForm({
   run,
   loading,
@@ -232,6 +235,11 @@ function ImportFixturesForm({
     const to = dateTo.trim() || defaultTo;
     const path = `/api/admin/import-fixtures?dateFrom=${encodeURIComponent(from)}&dateTo=${encodeURIComponent(to)}`;
     run("Import fixtures", "GET", path);
+  };
+
+  const doImportFullSeason = () => {
+    const path = `/api/admin/import-fixtures?dateFrom=${encodeURIComponent(SEASON_2025_26_START)}&dateTo=${encodeURIComponent(SEASON_2025_26_END)}`;
+    run("Import full season 2025/26", "GET", path);
   };
 
   return (
@@ -258,8 +266,18 @@ function ImportFixturesForm({
         <button type="button" onClick={doImport} disabled={!!loading} style={btnStyle}>
           {loading === "Import fixtures" ? "Importing…" : "Import fixtures from API"}
         </button>
+        <button
+          type="button"
+          onClick={doImportFullSeason}
+          disabled={!!loading}
+          style={{ ...btnStyle, borderColor: "rgba(255,255,255,0.35)" }}
+          title={`Fetches all PL fixtures from ${SEASON_2025_26_START} to ${SEASON_2025_26_END}. Safe to run multiple times (upserts by external_id).`}
+        >
+          {loading === "Import full season 2025/26" ? "Importing…" : "Import full season (2025/26)"}
+        </button>
       </div>
       <p style={{ fontSize: 12, opacity: 0.65, margin: 0 }}>
+        Full season: one click to backfill GW 1–38. Uses same API; upsert by external_id so existing fixtures are updated, not duplicated.
       </p>
     </div>
   );
@@ -460,6 +478,13 @@ export default function AdminPage() {
           >
             Score GW {gameweekInput || "…"}
           </button>
+          <button
+            onClick={() => run("Reset scores for current gameweek", "POST", "/api/admin/score-gameweek", { reset: true })}
+            disabled={!!loading}
+            style={{ ...btnStyle, marginLeft: 8, fontSize: 12 }}
+          >
+            {loading === "Reset scores for current gameweek" ? "Resetting…" : "Reset current GW scores"}
+          </button>
         </div>
         <p style={{ fontSize: 12, opacity: 0.65, marginTop: 6 }}>
           Uses the latest gameweek with finished fixtures, or the number you enter.
@@ -475,12 +500,26 @@ export default function AdminPage() {
       </section>
 
       <section style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 10 }}>Standings (Table page)</h2>
+        <p style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
+          The table page caches standings for 1 hour. Use this to pull fresh data when something important changed.
+        </p>
+        <button
+          onClick={() => run("Refresh standings", "POST", "/api/admin/refresh-standings")}
+          disabled={!!loading}
+          style={btnStyle}
+        >
+          {loading === "Refresh standings" ? "Refreshing…" : "Refresh standings cache"}
+        </button>
+      </section>
+
+      <section style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 10 }}>Results (from API)</h2>
         <p style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
           Sync scores from Football-Data.org. Needs FOOTBALL_DATA_API_KEY. Matches fixtures by date and team names.
         </p>
         <button
-          onClick={() => run("Sync results", "GET", "/api/admin/sync-results")}
+          onClick={() => run("Sync results", "GET", "/api/admin/sync-results?debug=1")}
           disabled={!!loading}
           style={btnStyle}
         >

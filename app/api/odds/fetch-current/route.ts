@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { requireAdmin } from "@/lib/admin/requireAdmin";
 
 /**
- * Refreshes current odds for upcoming fixtures. Callable by cron (CRON_SECRET) or admin (session cookie).
+ * Refreshes current odds for upcoming fixtures.
  */
 export async function POST(req: Request) {
   const adminError = requireAdmin(req);

@@ -2,10 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * Returns the current user's predictions for the given fixture IDs (for pre-filling the play page).
- * - leagueId omitted or empty: global predictions (league_id is null).
- * - leagueId set: predictions for that league only.
- * Requires Authorization: Bearer <access_token>.
+ * Returns the current user's predictions for the given fixture IDs for pre-filling the play page.
  */
 export async function GET(req: Request) {
   try {
@@ -36,7 +33,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ predictions: [] });
     }
 
-    // --- Use service role so we can read this user's predictions for any league ---
+    // Use service role so we can read this user's predictions for any league 
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!serviceKey) {
       return NextResponse.json({ error: "Missing SUPABASE_SERVICE_ROLE_KEY" }, { status: 500 });
@@ -62,7 +59,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // --- Return a simple list for the play page to pre-fill inputs ---
+    // Return a simple list for the play page to pre-fill inputs
     const predictions = (rows ?? []).map((p) => ({
       fixture_id: p.fixture_id,
       pred_home_goals: p.pred_home_goals,

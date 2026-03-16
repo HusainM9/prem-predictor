@@ -5,7 +5,6 @@ import { requireAdmin } from "@/lib/admin/requireAdmin";
 /**
  * Adds the user with that email to the league as a member (if not already).
  */
-
 export async function POST(req: Request) {
   const unauthorized = requireAdmin(req);
   if (unauthorized) return unauthorized;

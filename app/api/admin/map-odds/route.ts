@@ -26,7 +26,6 @@ const ALIASES: Record<string, string> = {
   "nottm forest": "nottingham forest",
   forest: "nottingham forest",
   newcastle: "newcastle united",
-  // add more if you notice misses later
 };
 
 function canonical(team: string) {
