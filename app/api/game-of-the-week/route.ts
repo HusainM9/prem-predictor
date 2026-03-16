@@ -123,15 +123,21 @@ export async function GET(req: Request) {
           last_vote_winner: await getLastVoteWinner(supabase, season),
         });
       }
+
       let votingGw = next.gameweek as number;
-      const { data: gwFixtures } = await supabase
-        .from("fixtures")
-        .select("kickoff_time")
-        .eq("season", season)
-        .eq("gameweek", votingGw)
-        .order("kickoff_time", { ascending: true });
-      const firstKickoffThisGw = (gwFixtures ?? [])[0]?.kickoff_time ?? null;
-      if (firstKickoffThisGw && nowIso >= firstKickoffThisGw) {
+      // Advance until we reach a gameweek whose voting window is currently open
+      // (or a gameweek with no fixtures yet, which should appear as "open").
+      for (let i = 0; i < 6; i++) {
+        const { data: gwFixtures } = await supabase
+          .from("fixtures")
+          .select("kickoff_time")
+          .eq("season", season)
+          .eq("gameweek", votingGw)
+          .order("kickoff_time", { ascending: true });
+        const firstKickoffThisGw = (gwFixtures ?? [])[0]?.kickoff_time ?? null;
+        if (!firstKickoffThisGw) break;
+        const closeMs = new Date(firstKickoffThisGw).getTime() - 24 * 60 * 60 * 1000;
+        if (Date.now() < closeMs) break;
         votingGw = votingGw + 1;
       }
       gameweek = votingGw;
@@ -162,22 +168,59 @@ export async function GET(req: Request) {
       .maybeSingle();
 
     const last_vote_winner = await getLastVoteWinner(supabase, season);
+
+    // If voting is not currently open for the computed future gameweek,
+    // present the last settled voting result gameweek instead (what users expect to see).
+    let displayGameweek = gameweek;
+    let displayFixtures = list;
+    let displayFirstKickoff = firstKickoff;
+    let displayVotingOpen = voting_open;
+    let displayMyVote = (myVote as { fixture_id?: string } | null)?.fixture_id ?? null;
+
+    const skippedImmediateNextGw =
+      !!last_vote_winner?.gameweek && gameweek > last_vote_winner.gameweek + 1;
+    if (
+      ( !voting_open || skippedImmediateNextGw ) &&
+      last_vote_winner?.gameweek &&
+      last_vote_winner.gameweek !== gameweek
+    ) {
+      displayGameweek = last_vote_winner.gameweek;
+      const { data: settledFixtures } = await supabase
+        .from("fixtures")
+        .select("id, home_team, away_team, kickoff_time")
+        .eq("season", season)
+        .eq("gameweek", displayGameweek)
+        .order("kickoff_time", { ascending: true });
+      displayFixtures = settledFixtures ?? [];
+      displayFirstKickoff = displayFixtures[0]?.kickoff_time ?? null;
+      displayVotingOpen = false;
+      const { data: myVoteForDisplayGw } = await supabase
+        .from("game_of_the_week_votes")
+        .select("fixture_id")
+        .eq("user_id", user.id)
+        .eq("season", season)
+        .eq("gameweek", displayGameweek)
+        .maybeSingle();
+      displayMyVote = (myVoteForDisplayGw as { fixture_id?: string } | null)?.fixture_id ?? null;
+    }
+
     const current_vote_winner =
-      firstKickoff != null && Date.now() >= new Date(firstKickoff).getTime() - 24 * 60 * 60 * 1000
-        ? await getWinnerForGameweek(supabase, season, gameweek)
+      displayFirstKickoff != null &&
+      Date.now() >= new Date(displayFirstKickoff).getTime() - 24 * 60 * 60 * 1000
+        ? await getWinnerForGameweek(supabase, season, displayGameweek)
         : null;
 
     return NextResponse.json({
-      voting_open,
-      first_kickoff: firstKickoff,
-      fixtures: list.map((f: { id: string; home_team: string; away_team: string; kickoff_time: string }) => ({
+      voting_open: displayVotingOpen,
+      first_kickoff: displayFirstKickoff,
+      fixtures: displayFixtures.map((f: { id: string; home_team: string; away_team: string; kickoff_time: string }) => ({
         id: f.id,
         home_team: f.home_team,
         away_team: f.away_team,
         kickoff_time: f.kickoff_time,
       })),
-      my_vote_fixture_id: (myVote as { fixture_id?: string } | null)?.fixture_id ?? null,
-      gameweek,
+      my_vote_fixture_id: displayMyVote,
+      gameweek: displayGameweek,
       season,
       current_vote_winner,
       last_vote_winner,

@@ -5,6 +5,13 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { LeaderboardTable, type LeaderboardEntry } from "@/components/leaderboard/LeaderboardTable";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getLeaderboardTitle } from "@/lib/leaderboard";
 import { isReservedLeagueName } from "@/lib/name-validation";
 
@@ -197,54 +204,41 @@ function LeaderboardContent() {
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ opacity: 0.9, fontSize: 24 }} aria-hidden>🏆</span>
-          <select
-            value={leagueId ?? ""}
-            onChange={(e) => setLeague(e.target.value.trim() || null)}
-            style={{
-              padding: "8px 28px 8px 12px",
-              borderRadius: 8,
-              border: "1px solid rgba(255,255,255,0.2)",
-              background: "rgba(255,255,255,0.06)",
-              color: "inherit",
-              fontSize: 14,
-              cursor: "pointer",
-              minWidth: 140,
-            }}
+          <Select
+            value={leagueId ?? "__global__"}
+            onValueChange={(v) => setLeague(v === "__global__" ? null : v)}
           >
-            <option value="">Global league</option>
-            {leagues.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="min-w-[180px]">
+              <SelectValue placeholder="Global league" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__global__">Global league</SelectItem>
+              {leagues.map((l) => (
+                <SelectItem key={l.id} value={l.id}>
+                  {l.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 14, opacity: 0.9 }}>Per gameweek</span>
-          <select
-            value={effectiveGameweek ?? ""}
-            onChange={(e) => {
-              const v = e.target.value.trim();
-              setGameweek(v === "" ? null : Number(v));
-            }}
-            style={{
-              padding: "6px 24px 6px 10px",
-              borderRadius: 8,
-              border: "1px solid rgba(255,255,255,0.2)",
-              background: "rgba(255,255,255,0.06)",
-              color: "inherit",
-              fontSize: 14,
-              cursor: "pointer",
-              minWidth: 88,
-            }}
+          <Select
+            value={effectiveGameweek != null ? String(effectiveGameweek) : "__all__"}
+            onValueChange={(v) => setGameweek(v === "__all__" ? null : Number(v))}
           >
-            <option value="">All</option>
-            {gameweekOptions.map((gw) => (
-              <option key={gw} value={gw}>
-                GW {gw}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="min-w-[110px]">
+              <SelectValue placeholder="All" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All</SelectItem>
+              {gameweekOptions.map((gw) => (
+                <SelectItem key={gw} value={String(gw)}>
+                  GW {gw}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
