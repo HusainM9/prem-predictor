@@ -75,6 +75,9 @@ export async function POST(req: Request) {
     if (Date.now() >= kickoff) {
       return NextResponse.json({ error: "Predictions closed (kickoff passed)" }, { status: 400 });
     }
+    if (String(fixture.status ?? "").toLowerCase() !== "scheduled") {
+      return NextResponse.json({ error: "Predictions are closed for this fixture status" }, { status: 400 });
+    }
 
     if (predHomeGoals < 0 || predAwayGoals < 0) {
       return NextResponse.json({ error: "Invalid score" }, { status: 400 });

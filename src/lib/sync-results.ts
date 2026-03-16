@@ -66,6 +66,7 @@ function mapApiStatusToDb(apiStatus: string): "finished" | "in_play" | "schedule
   const u = apiStatus.toUpperCase();
   if (u === "FINISHED") return "finished";
   if (["IN_PLAY", "1H", "2H", "HT", "PAUSED", "LIVE"].includes(u)) return "in_play";
+  if (["POSTPONED", "SUSPENDED", "CANCELLED", "CANCELED"].includes(u)) return "in_play";
   return "scheduled";
 }
 
@@ -262,6 +263,7 @@ export async function syncResultsFromFootballData(options: SyncResultsOptions): 
       singleMatchResponse?.last_updated ?? globalLastUpdated ?? (m as { lastUpdated?: string }).lastUpdated ?? null;
     let hasScore = homeScore !== null && awayScore !== null;
     let dbStatus = mapApiStatusToDb(apiStatus);
+    const apiIsPostponedLike = ["POSTPONED", "SUSPENDED", "CANCELLED", "CANCELED"].includes(apiStatus.toUpperCase());
 
     const effectiveLastUpdatedMs = effectiveLastUpdated ? new Date(effectiveLastUpdated).getTime() : 0;
     const isStuck =
@@ -354,7 +356,7 @@ export async function syncResultsFromFootballData(options: SyncResultsOptions): 
     if (effectiveLastUpdated) {
       updatePayload.provider_last_updated = effectiveLastUpdated;
     }
-    updatePayload.is_stuck = !hasScore && isStuck;
+    updatePayload.is_stuck = !hasScore && (isStuck || apiIsPostponedLike);
     updatePayload.last_checked_at = new Date().toISOString();
 
     const { error } = await supabase.from("fixtures").update(updatePayload).eq("id", dbMatch.id);

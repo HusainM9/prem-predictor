@@ -55,9 +55,15 @@ export async function GET(req: Request) {
         kickoff_time: m.utcDate,
         home_team: m.homeTeam?.name ?? "",
         away_team: m.awayTeam?.name ?? "",
-        status: (String(m.status).toUpperCase() === "FINISHED") ? "finished" : "scheduled",
+        status:
+          String(m.status).toUpperCase() === "FINISHED"
+            ? "finished"
+            : ["POSTPONED", "SUSPENDED", "CANCELLED", "CANCELED"].includes(String(m.status).toUpperCase())
+              ? "in_play"
+              : "scheduled",
         home_goals: m.score?.fullTime?.home ?? null,
         away_goals: m.score?.fullTime?.away ?? null,
+        is_stuck: ["POSTPONED", "SUSPENDED", "CANCELLED", "CANCELED"].includes(String(m.status).toUpperCase()),
       };
 
       const { error } = await supabase.from("fixtures").upsert(row, {

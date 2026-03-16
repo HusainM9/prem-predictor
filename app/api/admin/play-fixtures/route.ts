@@ -17,6 +17,7 @@ export async function GET(req: Request) {
     .from("fixtures")
     .select("id, home_team, away_team, gameweek, kickoff_time, status")
     .eq("include_on_play_page", true)
+    .neq("status", "postponed")
     .order("kickoff_time", { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -49,12 +50,15 @@ export async function POST(req: Request) {
 
   const { data: fixture, error: fetchErr } = await supabase
     .from("fixtures")
-    .select("id, home_team, away_team, gameweek")
+    .select("id, home_team, away_team, gameweek, status")
     .eq("id", fixtureId)
     .maybeSingle();
 
   if (fetchErr || !fixture) {
     return NextResponse.json({ error: "Fixture not found" }, { status: 404 });
+  }
+  if (String((fixture as { status?: string }).status ?? "").toLowerCase() === "postponed") {
+    return NextResponse.json({ error: "Cannot add a postponed fixture to Play page" }, { status: 400 });
   }
 
   const { error: updateErr } = await supabase

@@ -132,6 +132,125 @@ function SetResultForm({
   );
 }
 
+function FixtureScheduleOverrideForm({
+  run,
+  loading,
+}: {
+  run: (action: string, method: "GET" | "POST", path: string, body?: object) => void;
+  loading: string | null;
+}) {
+  const [fixtureId, setFixtureId] = useState("");
+  const [status, setStatus] = useState("");
+  const [gameweek, setGameweek] = useState("");
+  const [kickoffTime, setKickoffTime] = useState("");
+  const [includeOnPlay, setIncludeOnPlay] = useState(false);
+  const [shouldSetIncludeOnPlay, setShouldSetIncludeOnPlay] = useState(false);
+  const [clearScores, setClearScores] = useState(true);
+
+  const hasAnyUpdate =
+    status.trim() !== "" ||
+    gameweek.trim() !== "" ||
+    kickoffTime.trim() !== "" ||
+    shouldSetIncludeOnPlay ||
+    clearScores;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <input
+          type="text"
+          placeholder="Fixture ID (UUID)"
+          value={fixtureId}
+          onChange={(e) => setFixtureId(e.target.value)}
+          style={{ width: 280, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.06)", color: "inherit" }}
+        />
+        <button
+          type="button"
+          disabled={!fixtureId.trim() || !!loading}
+          onClick={() =>
+            run("Mark fixture postponed", "POST", "/api/admin/update-fixture", {
+              fixtureId: fixtureId.trim(),
+              status: "postponed",
+              include_on_play_page: false,
+              clear_scores: true,
+            })
+          }
+          style={btnStyle}
+        >
+          {loading === "Mark fixture postponed" ? "…" : "Mark postponed now"}
+        </button>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          style={{ padding: 8, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.06)", color: "inherit" }}
+        >
+          <option value="">Status (optional)</option>
+          <option value="scheduled">scheduled</option>
+          <option value="in_play">in_play</option>
+          <option value="finished">finished</option>
+          <option value="postponed">postponed</option>
+        </select>
+        <input
+          type="number"
+          min={1}
+          placeholder="Gameweek (optional)"
+          value={gameweek}
+          onChange={(e) => setGameweek(e.target.value)}
+          style={{ width: 180, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.06)", color: "inherit" }}
+        />
+        <input
+          type="datetime-local"
+          value={kickoffTime}
+          onChange={(e) => setKickoffTime(e.target.value)}
+          style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.06)", color: "inherit" }}
+        />
+      </div>
+
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+          <input type="checkbox" checked={shouldSetIncludeOnPlay} onChange={(e) => setShouldSetIncludeOnPlay(e.target.checked)} />
+          Set include_on_play_page
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, opacity: shouldSetIncludeOnPlay ? 1 : 0.6 }}>
+          <input
+            type="checkbox"
+            checked={includeOnPlay}
+            onChange={(e) => setIncludeOnPlay(e.target.checked)}
+            disabled={!shouldSetIncludeOnPlay}
+          />
+          include_on_play_page = true
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+          <input type="checkbox" checked={clearScores} onChange={(e) => setClearScores(e.target.checked)} />
+          Clear scores
+        </label>
+      </div>
+
+      <div>
+        <button
+          type="button"
+          disabled={!fixtureId.trim() || !hasAnyUpdate || !!loading}
+          onClick={() => {
+            const body: Record<string, unknown> = { fixtureId: fixtureId.trim() };
+            if (status.trim()) body.status = status.trim();
+            if (gameweek.trim()) body.gameweek = Number(gameweek);
+            if (kickoffTime.trim()) body.kickoff_time = new Date(kickoffTime).toISOString();
+            if (shouldSetIncludeOnPlay) body.include_on_play_page = includeOnPlay;
+            if (clearScores) body.clear_scores = true;
+            run("Update fixture schedule", "POST", "/api/admin/update-fixture", body);
+          }}
+          style={btnStyle}
+        >
+          {loading === "Update fixture schedule" ? "Saving…" : "Apply fixture update"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 type PlayPageFixture = { id: string; home_team: string; away_team: string; gameweek: number; kickoff_time: string; status: string };
 
 function PlayPageFixturesForm({
@@ -443,6 +562,14 @@ export default function AdminPage() {
       <section style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 10 }}>Set / update result</h2>
         <SetResultForm run={run} loading={loading} />
+      </section>
+
+      <section style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 10 }}>Fixture schedule override</h2>
+        <p style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
+          For postponements/reschedules: mark fixture postponed immediately, then move it to a new kickoff/gameweek when confirmed.
+        </p>
+        <FixtureScheduleOverrideForm run={run} loading={loading} />
       </section>
 
       <section style={{ marginBottom: 24 }}>

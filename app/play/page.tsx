@@ -163,6 +163,7 @@ export default function PlayPage() {
         .select(selectCols)
         .eq("season", "2025/26")
         .eq("gameweek", nextGw)
+        .eq("status", "scheduled")
         .gte("kickoff_time", nowIso)
         .order("kickoff_time", { ascending: true });
 

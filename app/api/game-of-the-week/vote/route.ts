@@ -39,25 +39,32 @@ export async function POST(req: Request) {
 
     const { data: fixture, error: fixErr } = await supabase
       .from("fixtures")
-      .select("id, gameweek, kickoff_time")
+      .select("id, season, gameweek, kickoff_time, status")
       .eq("id", fixtureId)
       .maybeSingle();
     if (fixErr || !fixture) {
       return NextResponse.json({ error: "Fixture not found" }, { status: 404 });
     }
-    if (fixture.gameweek !== gameweek) {
+    if (fixture.gameweek !== gameweek || fixture.season !== season) {
       return NextResponse.json({ error: "Fixture is not in that gameweek" }, { status: 400 });
     }
 
+    const nowIso = new Date().toISOString();
     const { data: fixturesInGw } = await supabase
       .from("fixtures")
-      .select("kickoff_time")
+      .select("id, kickoff_time")
       .eq("season", season)
       .eq("gameweek", gameweek)
+      .eq("status", "scheduled")
+      .gte("kickoff_time", nowIso)
       .order("kickoff_time", { ascending: true });
     const firstKickoff = (fixturesInGw ?? [])[0]?.kickoff_time;
     if (!firstKickoff) {
       return NextResponse.json({ error: "No fixtures found for that gameweek" }, { status: 400 });
+    }
+    const allowedFixtureIds = new Set((fixturesInGw ?? []).map((f: { id: string }) => f.id));
+    if (!allowedFixtureIds.has(fixtureId)) {
+      return NextResponse.json({ error: "Fixture is not open for voting" }, { status: 400 });
     }
     const kickoffMs = new Date(firstKickoff).getTime();
     const closingMs = kickoffMs - 24 * 60 * 60 * 1000;
