@@ -59,9 +59,8 @@ export async function GET(req: Request) {
     });
   }
 
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : process.env.APP_URL || "http://localhost:3000";
+  // Use the same host that invoked this cron endpoint to avoid cross-deployment/auth mismatches.
+  const baseUrl = new URL(req.url).origin;
 
   const results: Array<{
     gameweek: number;
