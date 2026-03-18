@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/client"
@@ -22,6 +22,21 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [msg, setMsg] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [showForgot, setShowForgot] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState("")
+  const [forgotMsg, setForgotMsg] = useState<string | null>(null)
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [forgotCooldownUntil, setForgotCooldownUntil] = useState(0)
+  const [nowMs, setNowMs] = useState(() => Date.now())
+
+  const forgotCooldownSeconds = Math.max(0, Math.ceil((forgotCooldownUntil - nowMs) / 1000))
+  const forgotDisabled = forgotLoading || forgotCooldownSeconds > 0
+
+  useEffect(() => {
+    if (forgotCooldownSeconds <= 0) return
+    const t = setInterval(() => setNowMs(Date.now()), 250)
+    return () => clearInterval(t)
+  }, [forgotCooldownSeconds])
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -43,7 +58,6 @@ export default function LoginPage() {
           }
         }
       } catch {
-        // Fall through to normal auth call; Supabase will return generic invalid-credentials error.
       }
     }
 
@@ -54,6 +68,44 @@ export default function LoginPage() {
     if (error) return setMsg(error.message)
 
     router.push("/")
+  }
+
+  async function onForgotPassword() {
+    setForgotMsg(null)
+    const email = forgotEmail.trim().toLowerCase()
+    if (!email || !email.includes("@")) {
+      setForgotMsg("Enter a valid email address.")
+      return
+    }
+    const now = Date.now()
+    if (now < forgotCooldownUntil) {
+      return
+    }
+    // Start client cooldown from first click to reduce repeated spam clicks.
+    setForgotCooldownUntil(now + 30_000)
+    setForgotLoading(true)
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const retryAfter = Number(res.headers.get("Retry-After") ?? 0)
+        if (Number.isFinite(retryAfter) && retryAfter > 0) {
+          const candidate = Date.now() + retryAfter * 1000
+          setForgotCooldownUntil((prev) => (candidate > prev ? candidate : prev))
+        }
+        setForgotMsg(data.error ?? "Unable to send reset email right now.")
+      } else {
+        setForgotMsg(data.message ?? "If an account exists, we sent a reset link.")
+      }
+    } catch {
+      setForgotMsg("Unable to send reset email right now.")
+    } finally {
+      setForgotLoading(false)
+    }
   }
 
   return (
@@ -97,6 +149,53 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 className="bg-background border-border"
               />
+              <div className="pt-1">
+                <button
+                  type="button"
+                  className="text-xs text-primary underline-offset-4 hover:underline"
+                  onClick={() => {
+                    const emailLike = identifier.includes("@") ? identifier.trim() : ""
+                    if (emailLike && !forgotEmail) setForgotEmail(emailLike)
+                    setShowForgot((v) => !v)
+                    setForgotMsg(null)
+                  }}
+                >
+                  Forgot password?
+                </button>
+              </div>
+              {showForgot && (
+                <div className="mt-2 rounded-md border border-border bg-background p-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-email" className="text-foreground">
+                      Reset email
+                    </Label>
+                    <Input
+                      id="forgot-email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      autoComplete="email"
+                      className="bg-background border-border"
+                    />
+                    <Button type="button" size="sm" disabled={forgotDisabled} onClick={onForgotPassword}>
+                      {forgotLoading
+                        ? "Sending…"
+                        : forgotCooldownSeconds > 0
+                          ? `Try again in ${forgotCooldownSeconds}s`
+                          : "Send reset link"}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      One request every 30 seconds. 5 Requests per hour.
+                    </p>
+                    {forgotMsg && (
+                      <p className="text-xs text-muted-foreground" role="status">
+                        {forgotMsg}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             {msg && (
               <p className="text-sm text-destructive" role="alert">
