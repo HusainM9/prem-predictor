@@ -17,11 +17,16 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Base URL of this app 
-  const baseUrl =
-    process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : process.env.APP_URL || "http://localhost:3000";
+  const adminSecret = process.env.ADMIN_SECRET?.trim();
+  if (!adminSecret) {
+    return NextResponse.json(
+      { error: "ADMIN_SECRET is not set" },
+      { status: 500 }
+    );
+  }
+
+  // Use same host that invoked this endpoint.
+  const baseUrl = new URL(req.url).origin;
 
   const results: { step: string; ok: boolean; status: number; body?: unknown }[] = [];
 
@@ -29,7 +34,7 @@ export async function GET(req: Request) {
     // Map new fixtures to Odds API events
     const mapRes = await fetch(`${baseUrl}/api/admin/map-odds`, {
       cache: "no-store",
-      headers: { Authorization: `Bearer ${cronSecret}` },
+      headers: { Authorization: `Bearer ${adminSecret}` },
     });
     const mapBody = await mapRes.json().catch(() => ({}));
     results.push({
@@ -43,7 +48,7 @@ export async function GET(req: Request) {
     const fetchRes = await fetch(`${baseUrl}/api/odds/fetch-current`, {
       method: "POST",
       cache: "no-store",
-      headers: { Authorization: `Bearer ${cronSecret}` },
+      headers: { Authorization: `Bearer ${adminSecret}` },
     });
     const fetchBody = await fetchRes.json().catch(() => ({}));
     results.push({
@@ -56,7 +61,7 @@ export async function GET(req: Request) {
     // Lock odds for fixtures in the next 24h
     const lockRes = await fetch(`${baseUrl}/api/admin/lock-odds`, {
       cache: "no-store",
-      headers: { Authorization: `Bearer ${cronSecret}` },
+      headers: { Authorization: `Bearer ${adminSecret}` },
     });
     const lockBody = await lockRes.json().catch(() => ({}));
     results.push({
