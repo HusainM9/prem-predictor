@@ -101,7 +101,7 @@ export function DashboardPage({ onLogout }: { onLogout: () => void }) {
   >({})
   const [rank, setRank] = useState<number | null>(null)
   const [points, setPoints] = useState<number | null>(null)
-  const [lastGwChange, setLastGwChange] = useState<number | null>(null)
+  const [lastGwPoints, setLastGwPoints] = useState<number | null>(null)
   const [upcomingFixtures, setUpcomingFixtures] = useState<UpcomingFixture[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
@@ -132,7 +132,7 @@ export function DashboardPage({ onLogout }: { onLogout: () => void }) {
         setLeagueLeaderboards({})
         setRank(null)
         setPoints(null)
-        setLastGwChange(null)
+        setLastGwPoints(null)
         setUpcomingFixtures([])
         setCurrentGameweek(null)
         setNextKickoff(null)
@@ -147,7 +147,7 @@ export function DashboardPage({ onLogout }: { onLogout: () => void }) {
       setLeagueLeaderboards(data.league_leaderboards ?? {})
       setRank(data.rank ?? null)
       setPoints(data.points ?? null)
-      setLastGwChange(data.last_gw_change ?? null)
+      setLastGwPoints(data.last_gw_points ?? null)
       const mappedUpcoming: UpcomingFixture[] = Array.isArray(data.upcoming_fixtures)
         ? data.upcoming_fixtures.map((f: {
             homeTeam?: { name?: string; shortName?: string }
@@ -228,8 +228,16 @@ export function DashboardPage({ onLogout }: { onLogout: () => void }) {
               />
               <StatCard
                 label="Last GW"
-                value={lastGwChange != null ? (lastGwChange > 0 ? `+${lastGwChange}` : lastGwChange) : "—"}
-                change={lastGwChange != null ? lastGwChange : undefined}
+                value={lastGwPoints != null ? (lastGwPoints > 0 ? `+${lastGwPoints}` : lastGwPoints) : "—"}
+                valueClassName={
+                  lastGwPoints == null
+                    ? undefined
+                    : lastGwPoints > 0
+                      ? "text-positive"
+                      : lastGwPoints < 0
+                        ? "text-negative"
+                        : undefined
+                }
               />
             </div>
 

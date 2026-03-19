@@ -67,7 +67,7 @@ export async function GET(req: Request) {
     }
 
     const nowIso = new Date().toISOString();
-    const [nextRowRes, currentStartedRes, membersRes, upcomingRes] = await Promise.all([
+    const [nextRowRes, currentStartedRes, latestFinishedRes, membersRes, upcomingRes] = await Promise.all([
       supabase
         .from("fixtures")
         .select("kickoff_time, gameweek")
@@ -82,6 +82,14 @@ export async function GET(req: Request) {
         .select("gameweek")
         .eq("season", SEASON)
         .lt("kickoff_time", nowIso)
+        .order("kickoff_time", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("fixtures")
+        .select("gameweek")
+        .eq("season", SEASON)
+        .eq("status", "finished")
         .order("kickoff_time", { ascending: false })
         .limit(1)
         .maybeSingle(),
@@ -115,6 +123,8 @@ export async function GET(req: Request) {
         rank: null,
         points: null,
         last_gw_change: null,
+        last_gw_points: null,
+        last_gw_gameweek: null,
         upcoming_fixtures: [],
       });
     }
@@ -195,9 +205,12 @@ export async function GET(req: Request) {
     let myRank: number | null = null;
     let myPoints: number | null = null;
     let lastGwChange: number | null = null;
+    let lastGwPoints: number | null = null;
+    let lastGwGameweek: number | null = null;
 
     const currentGameweek = (nextRowRes.data?.gameweek as number | null) ?? null;
     const startedGameweek = (currentStartedRes.data?.gameweek as number | null) ?? null;
+    const latestFinishedGameweek = (latestFinishedRes.data?.gameweek as number | null) ?? null;
 
     let gwCurrentFixtureIds = new Set<string>();
     let gwPreviousFixtureIds = new Set<string>();
@@ -210,6 +223,23 @@ export async function GET(req: Request) {
         .in("gameweek", [startedGameweek, previousGameweek]);
       gwCurrentFixtureIds = new Set((gwFixtures ?? []).filter((f) => f.gameweek === startedGameweek).map((f) => f.id));
       gwPreviousFixtureIds = new Set((gwFixtures ?? []).filter((f) => f.gameweek === previousGameweek).map((f) => f.id));
+    }
+
+    if (latestFinishedGameweek != null && latestFinishedGameweek >= 1) {
+      const { data: lastGwFixtures } = await supabase
+        .from("fixtures")
+        .select("id")
+        .eq("season", SEASON)
+        .eq("gameweek", latestFinishedGameweek);
+
+      const lastGwFixtureIds = new Set((lastGwFixtures ?? []).map((f) => f.id as string));
+      const myLastGwRows = settledRows.filter(
+        (r) => r.user_id === user.id && lastGwFixtureIds.has(r.fixture_id)
+      );
+      const myLastGwAgg = aggregatePointsByUser(myLastGwRows).find((e) => e.user_id === user.id);
+      const myLastGwBonus = bonusByUserByGw.get(user.id)?.get(latestFinishedGameweek) ?? 0;
+      lastGwPoints = (myLastGwAgg?.total_points ?? 0) + myLastGwBonus;
+      lastGwGameweek = latestFinishedGameweek;
     }
 
     for (const league of leagues) {
@@ -292,6 +322,8 @@ export async function GET(req: Request) {
       rank: myRank,
       points: myPoints,
       last_gw_change: lastGwChange,
+      last_gw_points: lastGwPoints,
+      last_gw_gameweek: lastGwGameweek,
       upcoming_fixtures: upcomingFixtures,
     });
   } catch (err: unknown) {

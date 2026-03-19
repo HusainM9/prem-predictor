@@ -5,10 +5,11 @@ interface StatCardProps {
   label: string
   value: string | number
   change?: number
+  valueClassName?: string
   className?: string
 }
 
-export function StatCard({ label, value, change, className }: StatCardProps) {
+export function StatCard({ label, value, change, valueClassName, className }: StatCardProps) {
   return (
     <div
       className={cn(
@@ -20,7 +21,7 @@ export function StatCard({ label, value, change, className }: StatCardProps) {
         {label}
       </span>
       <div className="flex items-end gap-1 max-sm:gap-1 sm:gap-2">
-        <span className="text-lg font-bold text-foreground max-sm:text-lg sm:text-2xl">{value}</span>
+        <span className={cn("text-lg font-bold text-foreground max-sm:text-lg sm:text-2xl", valueClassName)}>{value}</span>
         {change !== undefined && (
           <span
             className={cn(

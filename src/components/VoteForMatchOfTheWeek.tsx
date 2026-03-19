@@ -182,7 +182,7 @@ export function VoteForMatchOfTheWeek({
       </button>
       {state.last_vote_winner && (
         <p className="mt-1 text-xs text-muted-foreground">
-          Game of the Week: GW{state.last_vote_winner.gameweek} <strong className="text-foreground">{state.last_vote_winner.home_team} vs {state.last_vote_winner.away_team}</strong>
+          Last game of the Week: GW{state.last_vote_winner.gameweek} <strong className="text-foreground">{state.last_vote_winner.home_team} vs {state.last_vote_winner.away_team}</strong>
         </p>
       )}
       {state.current_vote_winner && (
