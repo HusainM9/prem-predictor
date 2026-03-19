@@ -25,6 +25,8 @@ type Props = {
   gameweek?: number | null;
   /** Compact = single line + link; full = list of fixtures and vote buttons */
   variant?: "compact" | "full";
+  /** If true, render compact CTA without fetching GOTW API (for fast dashboard load). */
+  skipFetch?: boolean;
   /** Notify parent of the last settled match-of-the-week winner (for highlighting). */
   onLastWinnerChange?: (fixtureId: string | null) => void;
   className?: string;
@@ -33,6 +35,7 @@ type Props = {
 export function VoteForMatchOfTheWeek({
   gameweek,
   variant = "full",
+  skipFetch = false,
   onLastWinnerChange,
   className,
 }: Props) {
@@ -78,8 +81,25 @@ export function VoteForMatchOfTheWeek({
   };
 
   useEffect(() => {
+    if (skipFetch) return;
     load();
-  }, [gameweek]);
+  }, [gameweek, skipFetch]);
+
+  if (variant === "compact" && skipFetch) {
+    return (
+      <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${className ?? ""}`}>
+        <div className="flex items-center gap-2">
+          <Vote className="size-4 text-muted-foreground" aria-hidden />
+          <a
+            href="/play#vote-gotw"
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            Vote for match of the week
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   const vote = async (fixtureId: string) => {
     const { data: { session } } = await supabase.auth.getSession();

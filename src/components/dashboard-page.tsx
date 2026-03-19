@@ -215,7 +215,7 @@ export function DashboardPage({ onLogout }: { onLogout: () => void }) {
 
             <DeadlineCard nextKickoff={nextKickoff} />
 
-            <VoteForMatchOfTheWeek gameweek={currentGameweek} variant="compact" />
+            <VoteForMatchOfTheWeek gameweek={currentGameweek} variant="compact" skipFetch />
 
             <div className="grid grid-cols-3 gap-2 max-sm:gap-2 sm:gap-3">
               <StatCard
