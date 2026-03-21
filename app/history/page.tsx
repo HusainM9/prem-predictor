@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import { sumTotalPointsFromByGameweek } from "@/lib/history";
 import { HistoryView, type GameweekBonus, type HistoryPrediction } from "@/components/history/HistoryView";
+import type { GotwHistoryEntry } from "@/lib/game-of-the-week-history";
 
 type ByGameweek = Record<
   string,
@@ -18,6 +19,9 @@ export default function HistoryPage() {
   const [selectedGameweek, setSelectedGameweek] = useState(1);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [gotwEntries, setGotwEntries] = useState<GotwHistoryEntry[]>([]);
+  const [gotwLoading, setGotwLoading] = useState(true);
+  const [gotwError, setGotwError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,16 +31,19 @@ export default function HistoryPage() {
         if (!cancelled) {
           setErr("Please log in to see your history.");
           setLoading(false);
+          setGotwLoading(false);
         }
         return;
       }
-      const res = await fetch("/api/predictions/history", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      const data = await res.json();
+      const headers = { Authorization: `Bearer ${session.access_token}` };
+      const [predRes, gotwRes] = await Promise.all([
+        fetch("/api/predictions/history", { headers }),
+        fetch("/api/game-of-the-week/history", { headers }),
+      ]);
+      const data = await predRes.json();
       if (cancelled) return;
-      if (!res.ok) {
-        setErr(data.error ?? res.statusText);
+      if (!predRes.ok) {
+        setErr(data.error ?? predRes.statusText);
         setByGameweek({});
       } else {
         const byGw = data.by_gameweek ?? {};
@@ -48,7 +55,23 @@ export default function HistoryPage() {
         }
         setTotalPoints(sumTotalPointsFromByGameweek(byGw));
       }
+
+      if (gotwRes.ok) {
+        const gotwData = await gotwRes.json();
+        if (!cancelled) {
+          setGotwEntries(Array.isArray(gotwData.entries) ? gotwData.entries : []);
+          setGotwError(null);
+        }
+      } else {
+        const gotwData = await gotwRes.json().catch(() => ({}));
+        if (!cancelled) {
+          setGotwEntries([]);
+          setGotwError((gotwData as { error?: string }).error ?? gotwRes.statusText);
+        }
+      }
+
       setLoading(false);
+      setGotwLoading(false);
     })();
     return () => {
       cancelled = true;
@@ -96,6 +119,9 @@ export default function HistoryPage() {
       predictionsForGw={predictionsForGw}
       gameweekPoints={gameweekPoints}
       bonusesForGw={bonusesForGw}
+      gotwEntries={gotwEntries}
+      gotwLoading={gotwLoading}
+      gotwError={gotwError}
     />
   );
 }

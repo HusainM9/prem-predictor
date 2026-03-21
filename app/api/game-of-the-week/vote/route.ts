@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getGotwAnchorKickoffMs } from "@/lib/gotw-close";
 
 const DEFAULT_SEASON = "2025/26";
 
@@ -50,45 +51,66 @@ export async function POST(req: Request) {
     }
 
     const nowIso = new Date().toISOString();
-    const { data: fixturesInGw } = await supabase
+    // Closing time is 24h before the GW's first non-postponed kickoff (same as tally / GET).
+    const { data: gwOrdered } = await supabase
       .from("fixtures")
-      .select("id, kickoff_time")
+      .select("id, kickoff_time, status")
       .eq("season", season)
       .eq("gameweek", gameweek)
-      .eq("status", "scheduled")
-      .gte("kickoff_time", nowIso)
+      .neq("status", "postponed")
       .order("kickoff_time", { ascending: true });
-    const firstKickoff = (fixturesInGw ?? [])[0]?.kickoff_time;
-    if (!firstKickoff) {
+    const kickoffs = (gwOrdered ?? []).map((f: { kickoff_time: string }) => f.kickoff_time);
+    const anchorMs = getGotwAnchorKickoffMs(kickoffs);
+    if (anchorMs == null) {
       return NextResponse.json({ error: "No fixtures found for that gameweek" }, { status: 400 });
     }
-    const allowedFixtureIds = new Set((fixturesInGw ?? []).map((f: { id: string }) => f.id));
-    if (!allowedFixtureIds.has(fixtureId)) {
-      return NextResponse.json({ error: "Fixture is not open for voting" }, { status: 400 });
-    }
-    const kickoffMs = new Date(firstKickoff).getTime();
-    const closingMs = kickoffMs - 24 * 60 * 60 * 1000;
+    const closingMs = anchorMs - 24 * 60 * 60 * 1000;
     if (Date.now() >= closingMs) {
       return NextResponse.json(
         { error: "Voting has closed. It ends 24 hours before the first kickoff of the gameweek." },
         { status: 400 }
       );
     }
-
-    const { error: upsertErr } = await supabase
+    const allowedFixtureIds = new Set(
+      (gwOrdered ?? [])
+        .filter((f: { status: string; kickoff_time: string }) => f.status === "scheduled" && f.kickoff_time >= nowIso)
+        .map((f: { id: string }) => f.id)
+    );
+    if (!allowedFixtureIds.has(fixtureId)) {
+      return NextResponse.json({ error: "Fixture is not open for voting" }, { status: 400 });
+    }
+    // Preserve first `created_at` when the user changes pick. Tally uses created_at < close time;
+    // resetting it on every upsert made later edits look "after" the deadline and dropped all votes.
+    const { data: existing, error: existingErr } = await supabase
       .from("game_of_the_week_votes")
-      .upsert(
-        {
-          user_id: user.id,
-          season,
-          gameweek,
-          fixture_id: fixtureId,
-          created_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,season,gameweek" }
-      );
-    if (upsertErr) {
-      return NextResponse.json({ error: upsertErr.message }, { status: 500 });
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("season", season)
+      .eq("gameweek", gameweek)
+      .maybeSingle();
+    if (existingErr) {
+      return NextResponse.json({ error: existingErr.message }, { status: 500 });
+    }
+
+    if (existing?.id) {
+      const { error: updErr } = await supabase
+        .from("game_of_the_week_votes")
+        .update({ fixture_id: fixtureId })
+        .eq("id", existing.id);
+      if (updErr) {
+        return NextResponse.json({ error: updErr.message }, { status: 500 });
+      }
+    } else {
+      const { error: insErr } = await supabase.from("game_of_the_week_votes").insert({
+        user_id: user.id,
+        season,
+        gameweek,
+        fixture_id: fixtureId,
+        created_at: new Date().toISOString(),
+      });
+      if (insErr) {
+        return NextResponse.json({ error: insErr.message }, { status: 500 });
+      }
     }
 
     return NextResponse.json({

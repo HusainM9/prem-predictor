@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { syncResultsFromFootballData } from "@/lib/sync-results";
+import { getGotwAnchorKickoffMs } from "@/lib/gotw-close";
 
 const DEFAULT_SEASON = "2025/26";
 
@@ -26,14 +27,15 @@ async function settleGotwAtTMinus23h(supabaseUrl: string, serviceKey: string, se
     .select("id, kickoff_time")
     .eq("season", season)
     .eq("gameweek", gameweek)
+    .neq("status", "postponed")
     .order("kickoff_time", { ascending: true });
   const list = gwFixtures ?? [];
-  const firstKickoff = list[0]?.kickoff_time ?? null;
-  if (!firstKickoff) {
+  const kickoffs = list.map((f: { kickoff_time: string }) => f.kickoff_time);
+  const firstMs = getGotwAnchorKickoffMs(kickoffs);
+  if (firstMs == null) {
     return { settled: false, reason: "no_fixtures_for_gameweek" as const, gameweek };
   }
 
-  const firstMs = new Date(firstKickoff).getTime();
   const closingMs = firstMs - 24 * 60 * 60 * 1000;
   const settleMs = firstMs - 23 * 60 * 60 * 1000;
   const nowMs = Date.now();

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { requireAdmin } from "@/lib/admin/requireAdmin";
 import { scorePrediction } from "@/lib/scoring/points";
+import { getGotwVoteCloseMs } from "@/lib/gotw-close";
 
 const DEFAULT_SEASON = "2025/26";
 const GAME_OF_THE_WEEK_BONUS = 15;
@@ -114,27 +115,40 @@ export async function POST(req: Request) {
         reset_bonuses: true,
       });
     }
-    const firstKickoff = fixtures.reduce(
-      (min: string, f: { kickoff_time: string }) => (f.kickoff_time < min ? f.kickoff_time : min),
-      (fixtures as FixtureRow[])[0].kickoff_time
-    );
-    const kickoffMs = new Date(firstKickoff).getTime();
-    const closingIso = new Date(kickoffMs - 24 * 60 * 60 * 1000).toISOString();
-
-    // Game of the week: fixture with most votes where vote was before voting close 
-    let gameOfTheWeekFixtureId: string | null = null;
-    const { data: votes } = await supabase
-      .from("game_of_the_week_votes")
-      .select("fixture_id")
+    // GOTW close = 24h before earliest non-postponed kickoff in the GW (same as /api/game-of-the-week).
+    const { data: gwForClose } = await supabase
+      .from("fixtures")
+      .select("id, kickoff_time")
       .eq("season", season)
       .eq("gameweek", gameweek)
-      .lt("created_at", closingIso);
-    if (votes?.length) {
+      .neq("status", "postponed")
+      .order("kickoff_time", { ascending: true });
+    const kickoffsForClose = (gwForClose ?? []).map((f: { kickoff_time: string }) => f.kickoff_time);
+    const closeMs = getGotwVoteCloseMs(kickoffsForClose);
+    if (closeMs == null) {
+      return NextResponse.json(
+        { error: "No non-postponed fixtures found for this gameweek" },
+        { status: 400 }
+      );
+    }
+    const gwFixtureIdsForVotes = (gwForClose ?? []).map((f: { id: string }) => f.id);
+
+    // Game of the week: fixture with most votes where vote was before voting close
+    let gameOfTheWeekFixtureId: string | null = null;
+    const { data: voteRows } = await supabase
+      .from("game_of_the_week_votes")
+      .select("fixture_id, created_at")
+      .eq("season", season)
+      .in("fixture_id", gwFixtureIdsForVotes);
+    const votes = (voteRows ?? []).filter((v: { created_at: string }) => {
+      const t = new Date(v.created_at).getTime();
+      return !Number.isNaN(t) && t < closeMs;
+    });
+    if (votes.length) {
       const countByFixture = new Map<string, number>();
+      // Tally all votes for GW fixtures — do not restrict to already-finished fixtures (that dropped every vote before the GOTW match finished).
       for (const v of votes as { fixture_id: string }[]) {
-        if (fixtureIds.includes(v.fixture_id)) {
-          countByFixture.set(v.fixture_id, (countByFixture.get(v.fixture_id) ?? 0) + 1);
-        }
+        countByFixture.set(v.fixture_id, (countByFixture.get(v.fixture_id) ?? 0) + 1);
       }
       let maxCount = 0;
       for (const [fid, c] of countByFixture) {

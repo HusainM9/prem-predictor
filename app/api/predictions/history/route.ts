@@ -2,10 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * GET /api/predictions/history
  * Returns the current user's past predictions with fixture details and points.
- * Requires Authorization: Bearer <access_token> (from supabase.auth.getSession()).
- * Query: ?gameweek=number (optional) to filter by gameweek.
  */
 export async function GET(req: Request) {
   try {

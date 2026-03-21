@@ -1,8 +1,10 @@
 "use client";
 
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { Vote } from "lucide-react";
 import { TeamLogo } from "@/components/play/TeamLogo";
+import type { GotwHistoryEntry } from "@/lib/game-of-the-week-history";
 import { FaXmark } from "react-icons/fa6";
 import { FaCheck } from "react-icons/fa";
 
@@ -40,6 +42,9 @@ type Props = {
   gameweekPoints: number;
   positionChange?: number | null;
   bonusesForGw?: GameweekBonus[];
+  gotwEntries?: GotwHistoryEntry[];
+  gotwLoading?: boolean;
+  gotwError?: string | null;
 };
 
 const MAX_GW = 38;
@@ -71,9 +76,12 @@ export function HistoryView({
   gameweekPoints,
   positionChange,
   bonusesForGw = [],
+  gotwEntries = [],
+  gotwLoading = false,
+  gotwError = null,
 }: Props) {
   const [gwInput, setGwInput] = useState(String(selectedGameweek));
-  const [historyTab, setHistoryTab] = useState<"matches" | "bonuses">("matches");
+  const [historyTab, setHistoryTab] = useState<"matches" | "bonuses" | "gotw">("matches");
   useEffect(() => {
     setGwInput(String(selectedGameweek));
   }, [selectedGameweek]);
@@ -207,7 +215,7 @@ export function HistoryView({
         </div>
         {pendingCount > 0 && (
           <p className="mt-3 text-sm text-muted-foreground">
-            {pendingCount} fixture{pendingCount !== 1 ? "s are" : " is"} unscored and still settling. Scores are applied after all matches finish and at least 1 hour passes from the final provider update.
+            {pendingCount} fixture{pendingCount !== 1 ? "s are" : " is"} unscored and still settling. Scores are updated every 30 minutes.
           </p>
         )}
 
@@ -219,7 +227,7 @@ export function HistoryView({
         )}
 
         <div className="mt-6 max-sm:mt-4 sm:mt-8">
-          <div className="flex rounded-lg border border-border bg-muted/50 p-0.5 w-fit">
+          <div className="flex max-w-full w-fit flex-wrap gap-0.5 rounded-lg border border-border bg-muted/50 p-0.5">
             <button
               type="button"
               onClick={() => setHistoryTab("matches")}
@@ -246,6 +254,18 @@ export function HistoryView({
                   {bonusesForGw.length}
                 </span>
               )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setHistoryTab("gotw")}
+              className={`inline-flex min-h-[36px] items-center gap-1 rounded-md px-3 text-sm font-medium transition-colors ${
+                historyTab === "gotw"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Vote className="size-3.5 shrink-0 opacity-80" aria-hidden />
+              Match of week
             </button>
           </div>
 
@@ -375,6 +395,78 @@ export function HistoryView({
                     </div>
                   </li>
                 ))}
+              </ul>
+            )}
+          </section>
+        )}
+
+        {historyTab === "gotw" && (
+          <section className="mt-4">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground max-sm:text-xs sm:text-sm">
+              Match of the week
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Community pick per gameweek (votes close 24h before the first kickoff). Correct predictions on the winning
+              match earn +15 pts when the gameweek is scored.
+            </p>
+            {gotwError && <p className="mt-3 text-sm text-destructive">{gotwError}</p>}
+            {gotwLoading && !gotwError && (
+              <p className="mt-3 text-sm text-muted-foreground">Loading match-of-the-week history…</p>
+            )}
+            {!gotwLoading && !gotwError && gotwEntries.length === 0 && (
+              <p className="mt-3 text-sm text-muted-foreground">No fixtures for this season yet.</p>
+            )}
+            {!gotwLoading && !gotwError && gotwEntries.length > 0 && (
+              <ul className="mt-4 list-none space-y-2 p-0 m-0">
+                {gotwEntries.map((row) => {
+                  const isSelectedGw = row.gameweek === gwNum;
+                  const winnerLabel = row.winner
+                    ? `${row.winner.home_team} vs ${row.winner.away_team}`
+                    : row.voting_closed
+                      ? "No winner (no votes)"
+                      : "—";
+                  const myLabel = row.my_vote
+                    ? `${row.my_vote.home_team} vs ${row.my_vote.away_team}`
+                    : "—";
+                  let resultLabel = "—";
+                  if (!row.voting_closed) resultLabel = "Voting open";
+                  else if (row.winner && row.picked_winner === true) resultLabel = "+15 eligible";
+                  else if (row.winner && row.picked_winner === false) resultLabel = "Different pick";
+                  else if (row.winner && row.my_vote == null) resultLabel = "Didn't vote";
+                  else if (!row.winner && row.voting_closed) resultLabel = "No community pick";
+
+                  return (
+                    <li
+                      key={row.gameweek}
+                      className={`rounded-lg border border-border bg-card p-3 sm:p-4 ${
+                        isSelectedGw ? "ring-2 ring-primary/40" : ""
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-2 text-sm font-semibold text-foreground">
+                        <span>GW{row.gameweek}</span>
+                        {isSelectedGw && (
+                          <span className="rounded-md bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary">
+                            Selected above
+                          </span>
+                        )}
+                      </div>
+                      <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                        <div>
+                          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Winner</dt>
+                          <dd className="mt-0.5 font-medium text-foreground">{winnerLabel}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Your pick</dt>
+                          <dd className="mt-0.5 font-medium text-foreground">{myLabel}</dd>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Bonus</dt>
+                          <dd className="mt-0.5 text-muted-foreground">{resultLabel}</dd>
+                        </div>
+                      </dl>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>

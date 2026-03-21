@@ -17,17 +17,14 @@ type GotwState = {
   gameweek: number | null;
   season: string;
   current_vote_winner: LastVoteWinner;
+  last_settled_gameweek: number | null;
   last_vote_winner: LastVoteWinner;
 };
 
 type Props = {
-  /** Pass to force a specific gameweek; otherwise uses API default (next/current). */
   gameweek?: number | null;
-  /** Compact = single line + link; full = list of fixtures and vote buttons */
   variant?: "compact" | "full";
-  /** If true, render compact CTA without fetching GOTW API (for fast dashboard load). */
   skipFetch?: boolean;
-  /** Notify parent of the last settled match-of-the-week winner (for highlighting). */
   onLastWinnerChange?: (fixtureId: string | null) => void;
   className?: string;
 };
@@ -71,6 +68,10 @@ export function VoteForMatchOfTheWeek({
       gameweek: data.gameweek ?? null,
       season: data.season ?? "2025/26",
       current_vote_winner: data.current_vote_winner ?? null,
+      last_settled_gameweek:
+        data.last_settled_gameweek != null && Number.isFinite(Number(data.last_settled_gameweek))
+          ? Number(data.last_settled_gameweek)
+          : null,
       last_vote_winner: data.last_vote_winner ?? null,
     };
     setState(nextState);
@@ -171,6 +172,11 @@ export function VoteForMatchOfTheWeek({
             Last: GW{state.last_vote_winner.gameweek} {state.last_vote_winner.home_team} vs {state.last_vote_winner.away_team}
           </span>
         )}
+        {!state.last_vote_winner && state.last_settled_gameweek != null && (
+          <span className="text-xs text-muted-foreground">
+            GW{state.last_settled_gameweek} match of week: no votes counted before close
+          </span>
+        )}
         {state.current_vote_winner && (
           <span className="text-xs text-primary">
             Settled: GW{state.current_vote_winner.gameweek} {state.current_vote_winner.home_team} vs {state.current_vote_winner.away_team}
@@ -202,7 +208,15 @@ export function VoteForMatchOfTheWeek({
       </button>
       {state.last_vote_winner && (
         <p className="mt-1 text-xs text-muted-foreground">
-          Last game of the Week: GW{state.last_vote_winner.gameweek} <strong className="text-foreground">{state.last_vote_winner.home_team} vs {state.last_vote_winner.away_team}</strong>
+          Last game of the Week: GW{state.last_vote_winner.gameweek}{" "}
+          <strong className="text-foreground">
+            {state.last_vote_winner.home_team} vs {state.last_vote_winner.away_team}
+          </strong>
+        </p>
+      )}
+      {!state.last_vote_winner && state.last_settled_gameweek != null && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          GW{state.last_settled_gameweek} match of the week had no winning pick (no votes before the deadline, or votes were not on a fixture in that gameweek).
         </p>
       )}
       {state.current_vote_winner && (
