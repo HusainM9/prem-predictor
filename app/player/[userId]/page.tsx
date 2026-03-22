@@ -33,6 +33,7 @@ function toHistoryPrediction(p: PredictionItem): HistoryPrediction {
     pred_away_goals: p.pred_away_goals,
     points_awarded: p.points_awarded,
     bonus_exact_score_points: p.bonus_exact_score_points,
+    settled_at: p.settled_at,
     fixture: p.fixture
       ? {
           home_team: p.fixture.home_team,
