@@ -19,6 +19,8 @@ export type HistoryPrediction = {
   bonus_exact_score_points?: number;
   bonus_points?: number;
   settled_at?: string | null;
+  /** True when the viewer cannot see the predicted score until odds lock or kickoff. */
+  prediction_hidden?: boolean;
   fixture: {
     home_team: string;
     away_team: string;
@@ -49,7 +51,8 @@ type Props = {
 
 const MAX_GW = 38;
 
-function outcomeType(p: HistoryPrediction): "exact" | "correct" | "wrong" | "pending" {
+function outcomeType(p: HistoryPrediction): "exact" | "correct" | "wrong" | "pending" | "hidden" {
+  if (p.prediction_hidden) return "hidden";
   if (!p.settled_at) return "pending";
   const bonus = p.bonus_exact_score_points ?? p.bonus_points ?? 0;
   if (bonus > 0) return "exact";
@@ -87,11 +90,18 @@ export function HistoryView({
   }, [selectedGameweek]);
 
   const exactCount = predictionsForGw.filter(
-    (p) => !!p.settled_at && (p.bonus_exact_score_points ?? p.bonus_points ?? 0) > 0
+    (p) =>
+      !p.prediction_hidden &&
+      !!p.settled_at &&
+      (p.bonus_exact_score_points ?? p.bonus_points ?? 0) > 0
   ).length;
-  const correctCount = predictionsForGw.filter((p) => !!p.settled_at && (p.points_awarded ?? 0) > 0).length;
-  const wrongCount = predictionsForGw.filter((p) => !!p.settled_at && (p.points_awarded ?? 0) < 0).length;
-  const pendingCount = predictionsForGw.filter((p) => !p.settled_at).length;
+  const correctCount = predictionsForGw.filter(
+    (p) => !p.prediction_hidden && !!p.settled_at && (p.points_awarded ?? 0) > 0
+  ).length;
+  const wrongCount = predictionsForGw.filter(
+    (p) => !p.prediction_hidden && !!p.settled_at && (p.points_awarded ?? 0) < 0
+  ).length;
+  const pendingCount = predictionsForGw.filter((p) => !p.prediction_hidden && !p.settled_at).length;
 
   const maxGw = currentGameweek ?? MAX_GW;
   const gwNum = Math.max(1, Math.min(maxGw, selectedGameweek));
@@ -284,7 +294,13 @@ export function HistoryView({
               const bonus = p.bonus_exact_score_points ?? p.bonus_points ?? 0;
               const pts = (p.points_awarded ?? 0) + bonus;
               const borderColor =
-                type === "wrong" ? "border-l-destructive" : type === "pending" ? "border-l-muted" : "border-l-primary";
+                type === "hidden"
+                  ? "border-l-muted"
+                  : type === "wrong"
+                    ? "border-l-destructive"
+                    : type === "pending"
+                      ? "border-l-muted"
+                      : "border-l-primary";
               return (
                 <li key={p.prediction_id}>
                   <div
@@ -313,38 +329,54 @@ export function HistoryView({
                             </span>
                           </div>
                           <span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${
-                            type === "wrong"
-                              ? "bg-destructive/20 text-destructive"
-                              : type === "pending"
-                                ? "bg-muted text-muted-foreground"
-                                : "bg-primary/20 text-primary"
+                            type === "hidden"
+                              ? "bg-muted text-muted-foreground"
+                              : type === "wrong"
+                                ? "bg-destructive/20 text-destructive"
+                                : type === "pending"
+                                  ? "bg-muted text-muted-foreground"
+                                  : "bg-primary/20 text-primary"
                           }`}>
-                            {type === "pending" ? "Unscored" : type === "wrong" ? pts : `+${pts}`}
+                            {type === "hidden"
+                              ? "Hidden"
+                              : type === "pending"
+                                ? "Unscored"
+                                : type === "wrong"
+                                  ? pts
+                                  : `+${pts}`}
                           </span>
                         </div>
                         <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 border-t border-border pt-2 max-sm:mt-2 max-sm:gap-1.5 max-sm:pt-2 sm:mt-3 sm:gap-2 sm:pt-3">
-                          <span className="text-[10px] text-muted-foreground uppercase tracking-wide max-sm:text-[10px] sm:text-xs">
-                            Predicted {p.pred_home_goals}–{p.pred_away_goals}
-                          </span>
-                          {type === "exact" && (
-                            <span className="text-primary text-sm font-medium flex items-center justify-center gap-1">
-                              <span aria-hidden>🎯</span> Exact score
+                          {type === "hidden" ? (
+                            <span className="text-sm text-muted-foreground">
+                              Prediction hidden until odds lock or kickoff (this user keeps picks private before then).
                             </span>
-                          )}
-                          {type === "correct" && (
-                            <span className="text-primary text-sm font-medium flex items-center justify-center gap-1">
-                              <span aria-hidden><FaCheck className="text-green-500 text-xxl" /></span> Correct result
-                            </span>
-                          )}
-                          {type === "wrong" && (
-                            <span className="text-destructive text-sm font-medium flex items-center justify-center gap-1">
-                              <span aria-hidden><FaXmark className="text-red-500 text-xxl" /></span> Wrong ({p.points_awarded ?? 0} pts)
-                            </span>
-                          )}
-                          {type === "pending" && (
-                            <span className="text-muted-foreground text-sm font-medium">
-                              Settling in progress (points not final yet)
-                            </span>
+                          ) : (
+                            <>
+                              <span className="text-[10px] text-muted-foreground uppercase tracking-wide max-sm:text-[10px] sm:text-xs">
+                                Predicted {p.pred_home_goals}–{p.pred_away_goals}
+                              </span>
+                              {type === "exact" && (
+                                <span className="text-primary text-sm font-medium flex items-center justify-center gap-1">
+                                  <span aria-hidden>🎯</span> Exact score
+                                </span>
+                              )}
+                              {type === "correct" && (
+                                <span className="text-primary text-sm font-medium flex items-center justify-center gap-1">
+                                  <span aria-hidden><FaCheck className="text-green-500 text-xxl" /></span> Correct result
+                                </span>
+                              )}
+                              {type === "wrong" && (
+                                <span className="text-destructive text-sm font-medium flex items-center justify-center gap-1">
+                                  <span aria-hidden><FaXmark className="text-red-500 text-xxl" /></span> Wrong ({p.points_awarded ?? 0} pts)
+                                </span>
+                              )}
+                              {type === "pending" && (
+                                <span className="text-muted-foreground text-sm font-medium">
+                                  Settling in progress (points not final yet)
+                                </span>
+                              )}
+                            </>
                           )}
                         </div>
                       </>
@@ -364,7 +396,8 @@ export function HistoryView({
           )}
 
           <p className="mt-6 text-xs text-muted-foreground">
-            Only completed matches are shown. Switch gameweeks to view past results.
+            Upcoming fixtures may appear with predictions hidden depending on that player&apos;s privacy settings. Past
+            results show as usual. Switch gameweeks to view other rounds.
           </p>
         </section>
         )}

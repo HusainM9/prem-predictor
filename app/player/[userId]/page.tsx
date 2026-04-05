@@ -3,17 +3,19 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase/client";
 import { HistoryView, type HistoryPrediction } from "@/components/history/HistoryView";
 
 type PredictionItem = {
   prediction_id: string;
   fixture_id: string;
-  pred_home_goals: number;
-  pred_away_goals: number;
-  pick: string;
+  pred_home_goals: number | null;
+  pred_away_goals: number | null;
+  pick: string | null;
   points_awarded: number;
   bonus_exact_score_points: number;
   settled_at: string | null;
+  prediction_hidden?: boolean;
   fixture: {
     home_team: string;
     away_team: string;
@@ -29,11 +31,12 @@ function toHistoryPrediction(p: PredictionItem): HistoryPrediction {
   return {
     prediction_id: p.prediction_id,
     fixture_id: p.fixture_id,
-    pred_home_goals: p.pred_home_goals,
-    pred_away_goals: p.pred_away_goals,
+    pred_home_goals: p.pred_home_goals ?? 0,
+    pred_away_goals: p.pred_away_goals ?? 0,
     points_awarded: p.points_awarded,
     bonus_exact_score_points: p.bonus_exact_score_points,
     settled_at: p.settled_at,
+    prediction_hidden: p.prediction_hidden === true,
     fixture: p.fixture
       ? {
           home_team: p.fixture.home_team,
@@ -73,7 +76,16 @@ export default function PlayerPredictionsPage() {
       setErr(null);
     });
 
-    fetch(`/api/player/${encodeURIComponent(userId)}/predictions`)
+    const load = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: HeadersInit = {};
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+      return fetch(`/api/player/${encodeURIComponent(userId)}/predictions`, { headers });
+    };
+
+    load()
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
@@ -87,8 +99,8 @@ export default function PlayerPredictionsPage() {
           if (cgw != null) setSelectedGameweek(cgw);
         }
       })
-      .catch((e) => {
-        if (!cancelled) setErr(e.message);
+      .catch((e: unknown) => {
+        if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

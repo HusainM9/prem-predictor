@@ -26,7 +26,7 @@ export async function GET(req: Request) {
 
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("display_name, display_name_changed_at")
+      .select("display_name, display_name_changed_at, predictions_public_before_lock")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -44,6 +44,7 @@ export async function GET(req: Request) {
       display_name_changed_at: profile?.display_name_changed_at ?? null,
       next_display_name_change_at: nextChangeAt?.toISOString() ?? null,
       can_change_display_name: canChangeDisplayName,
+      predictions_public_before_lock: profile?.predictions_public_before_lock === true,
       email: user.email ?? null,
     });
   } catch (err: unknown) {
@@ -80,6 +81,23 @@ export async function PATCH(req: Request) {
     const supabase = createClient(supabaseUrl, serviceKey);
 
     const body = await req.json().catch(() => ({}));
+
+    if (typeof body.predictions_public_before_lock === "boolean") {
+      const now = new Date().toISOString();
+      const { error } = await supabase.from("profiles").upsert(
+        {
+          id: user.id,
+          predictions_public_before_lock: body.predictions_public_before_lock,
+          updated_at: now,
+        },
+        { onConflict: "id" }
+      );
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({
+        success: true,
+        predictions_public_before_lock: body.predictions_public_before_lock,
+      });
+    }
 
     if (typeof body.display_name === "string") {
       const trimmed = body.display_name.trim();

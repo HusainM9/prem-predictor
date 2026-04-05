@@ -32,6 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Switch } from "@/components/ui/switch"
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -51,6 +52,9 @@ export default function ProfilePage() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [passwordMsg, setPasswordMsg] = useState<string | null>(null)
   const [changingPassword, setChangingPassword] = useState(false)
+  const [predictionsPublicBeforeLock, setPredictionsPublicBeforeLock] = useState(false)
+  const [prefsSaving, setPrefsSaving] = useState(false)
+  const [prefsMsg, setPrefsMsg] = useState<string | null>(null)
 
   useEffect(() => {
     queueMicrotask(() => setMounted(true))
@@ -75,6 +79,7 @@ export default function ProfilePage() {
       setDisplayName(data.display_name ?? "")
       setCanChangeDisplayName(data.can_change_display_name ?? true)
       setNextDisplayNameChangeAt(data.next_display_name_change_at ?? null)
+      setPredictionsPublicBeforeLock(data.predictions_public_before_lock === true)
       setLoading(false)
     }
     load()
@@ -159,6 +164,34 @@ export default function ProfilePage() {
     router.replace("/")
   }
 
+  async function handlePredictionsPrivacyChange(checked: boolean) {
+    setPrefsMsg(null)
+    setPrefsSaving(true)
+    const previous = predictionsPublicBeforeLock
+    setPredictionsPublicBeforeLock(checked)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      setPrefsSaving(false)
+      setPredictionsPublicBeforeLock(previous)
+      return
+    }
+    const res = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ predictions_public_before_lock: checked }),
+    })
+    const data = await res.json().catch(() => ({}))
+    setPrefsSaving(false)
+    if (!res.ok) {
+      setPredictionsPublicBeforeLock(previous)
+      setPrefsMsg(typeof data.error === "string" ? data.error : "Could not update setting.")
+      return
+    }
+  }
+
   if (loading) {
     return (
       <main className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center px-4 py-12">
@@ -235,9 +268,32 @@ export default function ProfilePage() {
             <Card className="border-border bg-card">
               <CardHeader>
                 <CardTitle>Preferences / Accessibility</CardTitle>
-                <CardDescription>Appearance.</CardDescription>
+                <CardDescription>Appearance and prediction visibility.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                <div className="flex flex-row items-center justify-between gap-4 rounded-lg border border-border p-4">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="pred-privacy" className="text-base">
+                      Public predictions before odds lock
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      When off (default), others cannot see your predicted scores until odds are locked or the match has
+                      kicked off. You always see your own picks on Play. Turn on to let others see your line before then.
+                    </p>
+                    {prefsMsg && (
+                      <p className="text-xs text-destructive" role="alert">
+                        {prefsMsg}
+                      </p>
+                    )}
+                  </div>
+                  <Switch
+                    id="pred-privacy"
+                    checked={predictionsPublicBeforeLock}
+                    disabled={prefsSaving}
+                    onCheckedChange={(v) => void handlePredictionsPrivacyChange(v)}
+                    aria-label="Public predictions before odds lock"
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label>Theme</Label>
                   {mounted && (
