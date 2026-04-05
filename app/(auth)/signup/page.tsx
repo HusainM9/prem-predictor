@@ -4,6 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/client"
+import { formatOAuthInitError } from "@/lib/auth-helpers"
 import { validateDisplayName, DISPLAY_NAME_MAX_LENGTH } from "@/lib/name-validation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -110,6 +111,19 @@ export default function SignupPage() {
       return
     }
     router.push("/")
+  }
+
+  async function onGoogleSignIn() {
+    setMsg(null)
+    setLoading(true)
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+    setLoading(false)
+    if (error) setMsg(formatOAuthInitError(error))
   }
 
   return (
@@ -227,6 +241,24 @@ export default function SignupPage() {
                 disabled={loading}
               >
                 {loading ? "Creating account…" : "Create account"}
+              </Button>
+              <div className="relative w-full">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">Or</span>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                size="lg"
+                disabled={loading}
+                onClick={() => void onGoogleSignIn()}
+              >
+                Continue with Google
               </Button>
               <p className="text-center text-sm text-muted-foreground">
                 Already have an account?{" "}

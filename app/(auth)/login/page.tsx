@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/client"
+import { formatOAuthInitError } from "@/lib/auth-helpers"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -70,6 +71,19 @@ export default function LoginPage() {
     router.push("/")
   }
 
+  async function onGoogleSignIn() {
+    setMsg(null)
+    setLoading(true)
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+    setLoading(false)
+    if (error) setMsg(formatOAuthInitError(error))
+  }
+
   async function onForgotPassword() {
     setForgotMsg(null)
     const email = forgotEmail.trim().toLowerCase()
@@ -81,7 +95,7 @@ export default function LoginPage() {
     if (now < forgotCooldownUntil) {
       return
     }
-    // Start client cooldown from first click to reduce repeated spam clicks.
+    // Start client cooldown from first click
     setForgotCooldownUntil(now + 30_000)
     setForgotLoading(true)
     try {
@@ -211,6 +225,24 @@ export default function LoginPage() {
               disabled={loading}
             >
               {loading ? "Signing in…" : "Log in"}
+            </Button>
+            <div className="relative w-full">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">Or</span>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              size="lg"
+              disabled={loading}
+              onClick={() => void onGoogleSignIn()}
+            >
+              Continue with Google
             </Button>
             <p className="text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{" "}
