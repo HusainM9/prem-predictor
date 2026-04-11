@@ -672,7 +672,11 @@ export default function AdminPage() {
 
       <section style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 10 }}>Odds</h2>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <p style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
+          <strong>Unlock</strong> clears <code style={{ fontSize: 11 }}>odds_locked_at</code> and the locked line on fixtures, and{" "}
+          <code style={{ fontSize: 11 }}>locked_odds</code> on predictions, so you can refresh prices and lock again.
+        </p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <button
             onClick={() => run("Map odds", "GET", "/api/admin/map-odds")}
             disabled={!!loading}
@@ -693,6 +697,51 @@ export default function AdminPage() {
             style={btnStyle}
           >
             {loading === "Lock odds (24h window)" ? "…" : "Lock odds"}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              void run("Unlock odds (upcoming)", "POST", "/api/admin/unlock-odds?scope=upcoming")
+            }
+            disabled={!!loading}
+            style={{ ...btnStyle, background: "rgba(220, 120, 80, 0.25)", border: "1px solid rgba(220,120,80,0.45)" }}
+          >
+            {loading === "Unlock odds (upcoming)" ? "…" : "Unlock odds (upcoming)"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const id = typeof window !== "undefined" ? window.prompt("Fixture UUID to unlock")?.trim() : "";
+              if (!id) return;
+              void run(
+                "Unlock odds (one fixture)",
+                "POST",
+                `/api/admin/unlock-odds?fixtureId=${encodeURIComponent(id)}`
+              );
+            }}
+            disabled={!!loading}
+            style={{ ...btnStyle, background: "rgba(220, 120, 80, 0.2)", border: "1px solid rgba(220,120,80,0.35)" }}
+          >
+            {loading === "Unlock odds (one fixture)" ? "…" : "Unlock one fixture…"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const gw = gameweekInput.trim();
+              if (!gw) {
+                window.alert("Enter a gameweek number in the Score gameweek field above first.");
+                return;
+              }
+              void run(
+                `Unlock odds (GW ${gw})`,
+                "POST",
+                `/api/admin/unlock-odds?season=${encodeURIComponent("2025/26")}&gameweek=${encodeURIComponent(gw)}`
+              );
+            }}
+            disabled={!!loading}
+            style={{ ...btnStyle, background: "rgba(220, 120, 80, 0.15)", border: "1px solid rgba(220,120,80,0.3)" }}
+          >
+            {loading?.startsWith("Unlock odds (GW") ? "…" : "Unlock locked in GW (uses GW # above)"}
           </button>
         </div>
       </section>

@@ -46,7 +46,16 @@ export async function GET(req: Request) {
 
     let upserted = 0;
 
+    function mapFootballDataStatus(raw: string): string {
+      const u = String(raw).toUpperCase();
+      if (u === "FINISHED") return "finished";
+      if (u === "POSTPONED" || u === "SUSPENDED" || u === "CANCELLED" || u === "CANCELED") return "postponed";
+      if (["LIVE", "IN_PLAY", "PAUSED"].includes(u)) return "in_play";
+      return "scheduled";
+    }
+
     for (const m of matches) {
+      const status = mapFootballDataStatus(String(m.status ?? ""));
       const row = {
         external_source: "football-data",
         external_id: String(m.id),
@@ -55,15 +64,11 @@ export async function GET(req: Request) {
         kickoff_time: m.utcDate,
         home_team: m.homeTeam?.name ?? "",
         away_team: m.awayTeam?.name ?? "",
-        status:
-          String(m.status).toUpperCase() === "FINISHED"
-            ? "finished"
-            : ["POSTPONED", "SUSPENDED", "CANCELLED", "CANCELED"].includes(String(m.status).toUpperCase())
-              ? "in_play"
-              : "scheduled",
+        status,
         home_goals: m.score?.fullTime?.home ?? null,
         away_goals: m.score?.fullTime?.away ?? null,
         is_stuck: ["POSTPONED", "SUSPENDED", "CANCELLED", "CANCELED"].includes(String(m.status).toUpperCase()),
+        ...(status === "postponed" ? { include_on_play_page: false as const } : {}),
       };
 
       const { error } = await supabase.from("fixtures").upsert(row, {

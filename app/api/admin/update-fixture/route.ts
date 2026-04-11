@@ -36,13 +36,9 @@ export async function POST(req: Request) {
           { status: 400 }
         );
       }
-      // DB constraint may not include "postponed" yet, so store it as in_play
-      // and force-hide from prediction/voting flows.
-      const storedStatus = nextStatus === "postponed" ? "in_play" : nextStatus;
-      update.status = storedStatus;
+      update.status = nextStatus;
       if (nextStatus === "postponed") {
         update.include_on_play_page = false;
-        update.is_stuck = true;
       }
     }
 

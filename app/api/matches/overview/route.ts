@@ -17,6 +17,26 @@ type Fixture = {
   is_stuck?: boolean;
 };
 
+/** Hide from Scoreline list: postponed/cancelled, invalid kickoff, or TBD 00:00:00 UTC (any non-finished status). */
+function shouldHideFromMatchesOverview(f: { kickoff_time: string; status: string }): boolean {
+  const s = (f.status ?? "").toLowerCase();
+  if (s === "postponed" || s === "cancelled" || s === "canceled") return true;
+
+  const d = new Date(f.kickoff_time);
+  if (!Number.isFinite(d.getTime())) return true;
+
+  const isMidnightUtc =
+    d.getUTCHours() === 0 &&
+    d.getUTCMinutes() === 0 &&
+    d.getUTCSeconds() === 0 &&
+    d.getUTCMilliseconds() === 0;
+  const finished = s === "finished" || s === "ft";
+  // Provider placeholder date; do not show as live (e.g. stale in_play) or upcoming.
+  if (isMidnightUtc && !finished) return true;
+
+  return false;
+}
+
 export async function GET(req: Request) {
   try {
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -117,6 +137,9 @@ export async function GET(req: Request) {
         .eq("season", SEASON)
         .lt("kickoff_time", firstKickoff)
         .neq("status", "finished")
+        .neq("status", "postponed")
+        .neq("status", "cancelled")
+        .neq("status", "canceled")
         .order("kickoff_time", { ascending: true });
       if (extraFx) extraList = (extraFx as Fixture[]).slice();
     }
@@ -131,8 +154,10 @@ export async function GET(req: Request) {
     }
     combined.sort((a, b) => a.kickoff_time.localeCompare(b.kickoff_time));
 
+    const visible = combined.filter((f) => !shouldHideFromMatchesOverview(f));
+
     return NextResponse.json({
-      fixtures: combined,
+      fixtures: visible,
       current_gameweek: computedCurrentGw,
       min_gameweek: minGwInDb,
       viewing_gameweek: viewingGw,

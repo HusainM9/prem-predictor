@@ -43,7 +43,7 @@ export async function GET(req: Request) {
     // Fetch predictions for this user and these fixtures; filter by league 
     let query = supabase
       .from("predictions")
-      .select("fixture_id, pred_home_goals, pred_away_goals")
+      .select("fixture_id, pred_home_goals, pred_away_goals, points_awarded, bonus_exact_score_points, settled_at")
       .eq("user_id", user.id)
       .in("fixture_id", fixtureIds);
 
@@ -64,6 +64,9 @@ export async function GET(req: Request) {
       fixture_id: p.fixture_id,
       pred_home_goals: p.pred_home_goals,
       pred_away_goals: p.pred_away_goals,
+      points_awarded: p.points_awarded ?? 0,
+      bonus_exact_score_points: p.bonus_exact_score_points ?? 0,
+      settled_at: p.settled_at ?? null,
     }));
 
     return NextResponse.json({ predictions });

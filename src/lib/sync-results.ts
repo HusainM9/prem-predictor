@@ -62,11 +62,11 @@ function getFullTimeScore(m: ApiMatchWithScore) {
   return { home: typeof home === "number" ? home : null, away: typeof away === "number" ? away : null };
 }
 
-function mapApiStatusToDb(apiStatus: string): "finished" | "in_play" | "scheduled" {
+function mapApiStatusToDb(apiStatus: string): "finished" | "in_play" | "scheduled" | "postponed" {
   const u = apiStatus.toUpperCase();
   if (u === "FINISHED") return "finished";
+  if (["POSTPONED", "SUSPENDED", "CANCELLED", "CANCELED"].includes(u)) return "postponed";
   if (["IN_PLAY", "1H", "2H", "HT", "PAUSED", "LIVE"].includes(u)) return "in_play";
-  if (["POSTPONED", "SUSPENDED", "CANCELLED", "CANCELED"].includes(u)) return "in_play";
   return "scheduled";
 }
 
@@ -358,6 +358,9 @@ export async function syncResultsFromFootballData(options: SyncResultsOptions): 
     }
     updatePayload.is_stuck = !hasScore && (isStuck || apiIsPostponedLike);
     updatePayload.last_checked_at = new Date().toISOString();
+    if (dbStatus === "postponed") {
+      updatePayload.include_on_play_page = false;
+    }
 
     const { error } = await supabase.from("fixtures").update(updatePayload).eq("id", dbMatch.id);
     if (error) {
@@ -510,6 +513,8 @@ export async function resyncSingleFixture(
       updatePayload.status = dbStatus;
       updatePayload.home_goals = homeScore;
       updatePayload.away_goals = awayScore;
+    } else if (dbStatus === "postponed") {
+      updatePayload.status = "postponed";
     } else {
       updatePayload.status = (fixture as { status?: string }).status ?? "scheduled";
     }
@@ -517,6 +522,9 @@ export async function resyncSingleFixture(
       updatePayload.external_id = replacedProviderId;
     }
     if (effectiveLastUpdated) updatePayload.provider_last_updated = effectiveLastUpdated;
+    if (dbStatus === "postponed") {
+      updatePayload.include_on_play_page = false;
+    }
 
     const { error: updateErr } = await supabase.from("fixtures").update(updatePayload).eq("id", fixtureId);
     if (updateErr) {

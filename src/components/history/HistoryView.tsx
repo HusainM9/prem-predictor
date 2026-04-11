@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Vote } from "lucide-react";
 import { TeamLogo } from "@/components/play/TeamLogo";
+import { FixtureCommunityStats } from "@/components/play/FixtureCommunityStats";
 import type { GotwHistoryEntry } from "@/lib/game-of-the-week-history";
 import { FaXmark } from "react-icons/fa6";
 import { FaCheck } from "react-icons/fa";
@@ -293,6 +294,12 @@ export function HistoryView({
               const type = outcomeType(p);
               const bonus = p.bonus_exact_score_points ?? p.bonus_points ?? 0;
               const pts = (p.points_awarded ?? 0) + bonus;
+              const hasFinalScore =
+                p.fixture != null &&
+                p.fixture.home_goals != null &&
+                p.fixture.away_goals != null &&
+                Number.isInteger(p.fixture.home_goals) &&
+                Number.isInteger(p.fixture.away_goals);
               const borderColor =
                 type === "hidden"
                   ? "border-l-muted"
@@ -379,6 +386,7 @@ export function HistoryView({
                             </>
                           )}
                         </div>
+                        <FixtureCommunityStats fixtureId={p.fixture_id} enabled={hasFinalScore} />
                       </>
                     ) : (
                       <span className="text-muted-foreground">Fixture {p.fixture_id}</span>
