@@ -55,6 +55,7 @@ export default function PlayerPredictionsPage() {
 
   const [predictions, setPredictions] = useState<PredictionItem[]>([]);
   const [displayName, setDisplayName] = useState<string | null>(null);
+  const [favouriteTeam, setFavouriteTeam] = useState<string | null>(null);
   const [totalPoints, setTotalPoints] = useState(0);
   const [currentGameweek, setCurrentGameweek] = useState<number | null>(null);
   const [selectedGameweek, setSelectedGameweek] = useState<number>(1);
@@ -93,6 +94,7 @@ export default function PlayerPredictionsPage() {
         else {
           setPredictions(d.predictions ?? []);
           setDisplayName(d.display_name ?? null);
+          setFavouriteTeam(d.favourite_team ?? null);
           setTotalPoints(d.total_points ?? 0);
           const cgw = d.current_gameweek ?? null;
           setCurrentGameweek(cgw);
@@ -173,6 +175,7 @@ export default function PlayerPredictionsPage() {
       onSelectedGameweekChange={setSelectedGameweek}
       predictionsForGw={predictionsForGw}
       gameweekPoints={gameweekPoints}
+      titleAvatarTeam={favouriteTeam}
     />
   );
 }

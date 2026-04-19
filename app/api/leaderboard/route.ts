@@ -122,26 +122,37 @@ export async function GET(req: Request) {
 
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, display_name")
+      .select("id, display_name, favourite_team")
       .in("id", userIds);
-    const nameByUser = new Map<string, string>(
-      (profiles ?? []).map((p) => [p.id, p.display_name ?? "Player"])
+    const profileByUser = new Map<string, { display_name: string; favourite_team: string | null }>(
+      (profiles ?? []).map((p) => [
+        p.id,
+        {
+          display_name: p.display_name ?? "Player",
+          favourite_team: p.favourite_team ?? null,
+        },
+      ])
     );
     for (const id of userIds) {
-      if (!nameByUser.has(id)) {
+      if (!profileByUser.has(id)) {
         await supabase
           .from("profiles")
           .upsert(
-            { id, display_name: "Player", updated_at: new Date().toISOString() },
+            {
+              id,
+              display_name: "Player",
+              favourite_team: null,
+              updated_at: new Date().toISOString(),
+            },
             { onConflict: "id" }
           );
-        nameByUser.set(id, "Player");
+        profileByUser.set(id, { display_name: "Player", favourite_team: null });
       }
     }
 
     const { entries: paginated, total_count } = buildLeaderboardPage(
       sorted,
-      nameByUser,
+      profileByUser,
       search,
       offsetParam,
       limitParam

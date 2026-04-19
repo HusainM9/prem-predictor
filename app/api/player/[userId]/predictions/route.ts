@@ -90,10 +90,11 @@ export async function GET(
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("display_name, predictions_public_before_lock")
+      .select("display_name, predictions_public_before_lock, favourite_team")
       .eq("id", id)
       .maybeSingle();
     const display_name = profile?.display_name ?? null;
+    const favourite_team = profile?.favourite_team ?? null;
     const predictionsPublicBeforeLock = profile?.predictions_public_before_lock === true;
 
     const { data: gwRow } = await supabase
@@ -193,6 +194,7 @@ export async function GET(
     return NextResponse.json({
       predictions: list,
       display_name,
+      favourite_team,
       total_points,
       gameweek_points,
       current_gameweek,

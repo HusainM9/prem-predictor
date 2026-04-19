@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { validateDisplayName } from "@/lib/name-validation";
+import { isValidFavouriteTeam } from "@/lib/premier-league-teams";
 
 export async function GET(req: Request) {
   try {
@@ -26,7 +27,7 @@ export async function GET(req: Request) {
 
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("display_name, display_name_changed_at, predictions_public_before_lock")
+      .select("display_name, display_name_changed_at, predictions_public_before_lock, favourite_team")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -45,6 +46,7 @@ export async function GET(req: Request) {
       next_display_name_change_at: nextChangeAt?.toISOString() ?? null,
       can_change_display_name: canChangeDisplayName,
       predictions_public_before_lock: profile?.predictions_public_before_lock === true,
+      favourite_team: profile?.favourite_team ?? null,
       email: user.email ?? null,
     });
   } catch (err: unknown) {
@@ -81,25 +83,45 @@ export async function PATCH(req: Request) {
     const supabase = createClient(supabaseUrl, serviceKey);
 
     const body = await req.json().catch(() => ({}));
+    const now = new Date().toISOString();
+    const updatePayload: {
+      id: string;
+      updated_at: string;
+      display_name?: string;
+      display_name_changed_at?: string;
+      predictions_public_before_lock?: boolean;
+      favourite_team?: string | null;
+    } = {
+      id: user.id,
+      updated_at: now,
+    };
+    let touched = false;
+    let nextDisplayNameChangeAt: string | null = null;
 
     if (typeof body.predictions_public_before_lock === "boolean") {
-      const now = new Date().toISOString();
-      const { error } = await supabase.from("profiles").upsert(
-        {
-          id: user.id,
-          predictions_public_before_lock: body.predictions_public_before_lock,
-          updated_at: now,
-        },
-        { onConflict: "id" }
-      );
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({
-        success: true,
-        predictions_public_before_lock: body.predictions_public_before_lock,
-      });
+      updatePayload.predictions_public_before_lock = body.predictions_public_before_lock;
+      touched = true;
     }
 
-    if (typeof body.display_name === "string") {
+    if (Object.prototype.hasOwnProperty.call(body, "favourite_team")) {
+      const raw = body.favourite_team;
+      if (raw == null || raw === "") {
+        updatePayload.favourite_team = null;
+      } else if (typeof raw === "string" && isValidFavouriteTeam(raw.trim())) {
+        updatePayload.favourite_team = raw.trim();
+      } else {
+        return NextResponse.json(
+          { error: "Invalid favourite_team. Select a valid Premier League team." },
+          { status: 400 }
+        );
+      }
+      touched = true;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "display_name")) {
+      if (typeof body.display_name !== "string") {
+        return NextResponse.json({ error: "display_name must be a string" }, { status: 400 });
+      }
       const trimmed = body.display_name.trim();
       if (trimmed.length === 0) {
         return NextResponse.json({ error: "display_name is required and must be non-empty" }, { status: 400 });
@@ -147,24 +169,40 @@ export async function PATCH(req: Request) {
         );
       }
 
-      const now = new Date().toISOString();
-      const { error } = await supabase
-        .from("profiles")
-        .upsert(
-          { id: user.id, display_name: trimmed, display_name_changed_at: now, updated_at: now },
-          { onConflict: "id" }
-        );
-
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      const nextAt = new Date(Date.now() + DISPLAY_NAME_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
-      return NextResponse.json({
-        success: true,
-        display_name: trimmed,
-        next_display_name_change_at: nextAt.toISOString(),
-      });
+      updatePayload.display_name = trimmed;
+      updatePayload.display_name_changed_at = now;
+      touched = true;
+      nextDisplayNameChangeAt = new Date(
+        Date.now() + DISPLAY_NAME_COOLDOWN_DAYS * 24 * 60 * 60 * 1000
+      ).toISOString();
     }
 
-    return NextResponse.json({ error: "No display_name to update" }, { status: 400 });
+    if (!touched) {
+      return NextResponse.json(
+        { error: "No profile fields to update." },
+        { status: 400 }
+      );
+    }
+
+    const { error } = await supabase
+      .from("profiles")
+      .upsert(updatePayload, { onConflict: "id" });
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json({
+      success: true,
+      display_name: updatePayload.display_name ?? null,
+      favourite_team:
+        Object.prototype.hasOwnProperty.call(updatePayload, "favourite_team")
+          ? updatePayload.favourite_team
+          : null,
+      predictions_public_before_lock:
+        typeof updatePayload.predictions_public_before_lock === "boolean"
+          ? updatePayload.predictions_public_before_lock
+          : null,
+      next_display_name_change_at: nextDisplayNameChangeAt,
+    });
   } catch (err: unknown) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },

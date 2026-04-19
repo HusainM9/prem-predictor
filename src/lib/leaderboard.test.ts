@@ -147,35 +147,36 @@ describe("buildLeaderboardPage", () => {
     { user_id: "u2", total_points: 80, accuracy: 4, correct_scores: 1 },
     { user_id: "u3", total_points: 60, accuracy: 3, correct_scores: 0 },
   ];
-  const names = new Map<string, string>([
-    ["u1", "Alice"],
-    ["u2", "Bob"],
-    ["u3", "Charlie"],
+  const profiles = new Map<string, { display_name: string; favourite_team: string | null }>([
+    ["u1", { display_name: "Alice", favourite_team: "Arsenal FC" }],
+    ["u2", { display_name: "Bob", favourite_team: null }],
+    ["u3", { display_name: "Charlie", favourite_team: "Liverpool FC" }],
   ]);
 
   it("assigns ranks, display names, accuracy and correct_scores", () => {
-    const { entries, total_count } = buildLeaderboardPage(sorted, names, "", 0, 10);
+    const { entries, total_count } = buildLeaderboardPage(sorted, profiles, "", 0, 10);
     expect(total_count).toBe(3);
     expect(entries).toHaveLength(3);
-    expect(entries[0]).toEqual({ rank: 1, user_id: "u1", display_name: "Alice", total_points: 100, accuracy: 5, correct_scores: 2 });
-    expect(entries[1]).toEqual({ rank: 2, user_id: "u2", display_name: "Bob", total_points: 80, accuracy: 4, correct_scores: 1 });
-    expect(entries[2]).toEqual({ rank: 3, user_id: "u3", display_name: "Charlie", total_points: 60, accuracy: 3, correct_scores: 0 });
+    expect(entries[0]).toEqual({ rank: 1, user_id: "u1", display_name: "Alice", favourite_team: "Arsenal FC", total_points: 100, accuracy: 5, correct_scores: 2 });
+    expect(entries[1]).toEqual({ rank: 2, user_id: "u2", display_name: "Bob", favourite_team: null, total_points: 80, accuracy: 4, correct_scores: 1 });
+    expect(entries[2]).toEqual({ rank: 3, user_id: "u3", display_name: "Charlie", favourite_team: "Liverpool FC", total_points: 60, accuracy: 3, correct_scores: 0 });
   });
 
   it("uses Player for missing display names", () => {
     const { entries } = buildLeaderboardPage(sorted, new Map(), "", 0, 10);
     expect(entries.every((e) => e.display_name === "Player")).toBe(true);
+    expect(entries.every((e) => e.favourite_team === null)).toBe(true);
   });
 
   it("filters by search without changing rank order", () => {
-    const { entries, total_count } = buildLeaderboardPage(sorted, names, "ob", 0, 10);
+    const { entries, total_count } = buildLeaderboardPage(sorted, profiles, "ob", 0, 10);
     expect(total_count).toBe(1);
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toEqual({ rank: 2, user_id: "u2", display_name: "Bob", total_points: 80, accuracy: 4, correct_scores: 1 });
+    expect(entries[0]).toEqual({ rank: 2, user_id: "u2", display_name: "Bob", favourite_team: null, total_points: 80, accuracy: 4, correct_scores: 1 });
   });
 
   it("applies offset and limit", () => {
-    const { entries, total_count } = buildLeaderboardPage(sorted, names, "", 1, 2);
+    const { entries, total_count } = buildLeaderboardPage(sorted, profiles, "", 1, 2);
     expect(total_count).toBe(3);
     expect(entries).toHaveLength(2);
     expect(entries[0].rank).toBe(2);
@@ -183,13 +184,13 @@ describe("buildLeaderboardPage", () => {
   });
 
   it("returns empty entries when offset past end", () => {
-    const { entries, total_count } = buildLeaderboardPage(sorted, names, "", 10, 5);
+    const { entries, total_count } = buildLeaderboardPage(sorted, profiles, "", 10, 5);
     expect(total_count).toBe(3);
     expect(entries).toEqual([]);
   });
 
   it("search is case-insensitive", () => {
-    const { entries } = buildLeaderboardPage(sorted, names, "ALICE", 0, 10);
+    const { entries } = buildLeaderboardPage(sorted, profiles, "ALICE", 0, 10);
     expect(entries).toHaveLength(1);
     expect(entries[0].display_name).toBe("Alice");
   });

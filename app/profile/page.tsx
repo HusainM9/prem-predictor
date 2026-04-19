@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import { supabase } from "@/lib/supabase/client"
+import { PREMIER_LEAGUE_TEAMS } from "@/lib/premier-league-teams"
 import { validateDisplayName, DISPLAY_NAME_MAX_LENGTH } from "@/lib/name-validation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -41,6 +42,9 @@ export default function ProfilePage() {
 
   const [email, setEmail] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState("")
+  const [favouriteTeam, setFavouriteTeam] = useState("")
+  const [initialDisplayName, setInitialDisplayName] = useState("")
+  const [initialFavouriteTeam, setInitialFavouriteTeam] = useState("")
   const [canChangeDisplayName, setCanChangeDisplayName] = useState(true)
   const [nextDisplayNameChangeAt, setNextDisplayNameChangeAt] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -75,8 +79,13 @@ export default function ProfilePage() {
         return
       }
       const data = await res.json()
+      const loadedDisplayName = data.display_name ?? ""
+      const loadedFavouriteTeam = data.favourite_team ?? ""
       setEmail(data.email ?? null)
-      setDisplayName(data.display_name ?? "")
+      setDisplayName(loadedDisplayName)
+      setFavouriteTeam(loadedFavouriteTeam)
+      setInitialDisplayName(loadedDisplayName)
+      setInitialFavouriteTeam(loadedFavouriteTeam)
       setCanChangeDisplayName(data.can_change_display_name ?? true)
       setNextDisplayNameChangeAt(data.next_display_name_change_at ?? null)
       setPredictionsPublicBeforeLock(data.predictions_public_before_lock === true)
@@ -87,16 +96,29 @@ export default function ProfilePage() {
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault()
-    if (!canChangeDisplayName && displayName) {
+    const trimmed = displayName.trim()
+    const previousDisplayName = initialDisplayName.trim()
+    const displayNameChanged = trimmed !== previousDisplayName
+    const favouriteTeamChanged = favouriteTeam !== initialFavouriteTeam
+
+    if (!displayNameChanged && !favouriteTeamChanged) {
+      setMsg("No changes to save.")
+      return
+    }
+
+    if (displayNameChanged && !canChangeDisplayName) {
       setMsg("You can only change your display name once every 60 days.")
       return
     }
-    const trimmed = displayName.trim()
-    const validation = validateDisplayName(trimmed)
-    if (!validation.valid) {
-      setMsg(validation.error ?? "Invalid name")
-      return
+
+    if (displayNameChanged) {
+      const validation = validateDisplayName(trimmed)
+      if (!validation.valid) {
+        setMsg(validation.error ?? "Invalid name")
+        return
+      }
     }
+
     setSaving(true)
     setMsg(null)
     const { data: { session } } = await supabase.auth.getSession()
@@ -104,13 +126,18 @@ export default function ProfilePage() {
       setSaving(false)
       return
     }
+
+    const payload: { display_name?: string; favourite_team?: string | null } = {}
+    if (displayNameChanged) payload.display_name = trimmed
+    if (favouriteTeamChanged) payload.favourite_team = favouriteTeam || null
+
     const res = await fetch("/api/profile", {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ display_name: trimmed }),
+      body: JSON.stringify(payload),
     })
     const data = await res.json()
     setSaving(false)
@@ -122,8 +149,14 @@ export default function ProfilePage() {
       }
       return
     }
-    setMsg(null)
-    setCanChangeDisplayName(false)
+    setMsg("Profile updated.")
+    if (displayNameChanged) {
+      setInitialDisplayName(trimmed)
+      setCanChangeDisplayName(false)
+    }
+    if (favouriteTeamChanged) {
+      setInitialFavouriteTeam(favouriteTeam)
+    }
     if (data.next_display_name_change_at) setNextDisplayNameChangeAt(data.next_display_name_change_at)
   }
 
@@ -253,10 +286,38 @@ export default function ProfilePage() {
                     />
                     <p className="text-xs text-muted-foreground">Email cannot be changed here.</p>
                   </div>
-                  {msg && <p className="text-sm text-destructive">{msg}</p>}
+                  <div className="space-y-2">
+                    <Label>Favourite team</Label>
+                    <Select
+                      value={favouriteTeam || "__none__"}
+                      onValueChange={(v) => setFavouriteTeam(v === "__none__" ? "" : v)}
+                    >
+                      <SelectTrigger className="bg-background border-border">
+                        <SelectValue placeholder="Select a Premier League team" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">No favourite team yet</SelectItem>
+                        {[...PREMIER_LEAGUE_TEAMS].sort((a, b) => a.localeCompare(b)).map((team) => (
+                          <SelectItem key={team} value={team}>
+                            {team}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Your favourite team crest is used as your profile picture.
+                    </p>
+                  </div>
+                  {msg && (
+                    <p
+                      className={`text-sm ${msg === "Profile updated." || msg === "No changes to save." ? "text-muted-foreground" : "text-destructive"}`}
+                    >
+                      {msg}
+                    </p>
+                  )}
                 </CardContent>
                 <CardFooter>
-                  <Button type="submit" disabled={saving || !canChangeDisplayName}>
+                  <Button type="submit" disabled={saving}>
                     {saving ? "Saving…" : "Save changes"}
                   </Button>
                 </CardFooter>

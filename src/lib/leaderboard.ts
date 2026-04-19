@@ -87,6 +87,7 @@ export type LeaderboardEntry = {
   rank: number;
   user_id: string;
   display_name: string;
+  favourite_team: string | null;
   total_points: number;
   accuracy: number;
   correct_scores: number;
@@ -97,7 +98,7 @@ export type LeaderboardEntry = {
  */
 export function buildLeaderboardPage(
   sortedByUser: LeaderboardUserAggregate[],
-  nameByUser: Map<string, string>,
+  profileByUser: Map<string, { display_name: string; favourite_team: string | null }>,
   search: string,
   offset: number,
   limit: number
@@ -105,7 +106,8 @@ export function buildLeaderboardPage(
   let entries: LeaderboardEntry[] = sortedByUser.map((e, i) => ({
     rank: i + 1,
     user_id: e.user_id,
-    display_name: nameByUser.get(e.user_id) ?? "Player",
+    display_name: profileByUser.get(e.user_id)?.display_name ?? "Player",
+    favourite_team: profileByUser.get(e.user_id)?.favourite_team ?? null,
     total_points: e.total_points,
     accuracy: e.accuracy,
     correct_scores: e.correct_scores,

@@ -5,10 +5,18 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/client"
 import { formatOAuthInitError } from "@/lib/auth-helpers"
+import { PREMIER_LEAGUE_TEAMS } from "@/lib/premier-league-teams"
 import { validateDisplayName, DISPLAY_NAME_MAX_LENGTH } from "@/lib/name-validation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Card,
   CardContent,
@@ -28,6 +36,8 @@ export default function SignupPage() {
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false)
   const [pendingEmail, setPendingEmail] = useState("")
   const [pendingPassword, setPendingPassword] = useState("")
+  const [favouriteTeam, setFavouriteTeam] = useState("")
+  const [pendingFavouriteTeam, setPendingFavouriteTeam] = useState("")
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -72,7 +82,10 @@ export default function SignupPage() {
       email: normalizedEmail,
       password,
       options: {
-        data: { display_name: trimmed },
+        data: {
+          display_name: trimmed,
+          favourite_team: favouriteTeam || null,
+        },
         emailRedirectTo: `${window.location.origin}/`,
       },
     })
@@ -89,6 +102,7 @@ export default function SignupPage() {
 
     setPendingEmail(normalizedEmail)
     setPendingPassword(password)
+    setPendingFavouriteTeam(favouriteTeam)
     setAwaitingConfirmation(true)
     setMsg("Check your inbox and confirm your email, then click the button below to log in.")
   }
@@ -109,6 +123,20 @@ export default function SignupPage() {
           : error.message
       )
       return
+    }
+
+    if (pendingFavouriteTeam) {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.access_token) {
+        await fetch("/api/profile", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ favourite_team: pendingFavouriteTeam }),
+        })
+      }
     }
     router.push("/")
   }
@@ -226,6 +254,25 @@ export default function SignupPage() {
                   autoComplete="new-password"
                   className="bg-background border-border"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-foreground">Favourite team (optional)</Label>
+                <Select
+                  value={favouriteTeam || "__none__"}
+                  onValueChange={(v) => setFavouriteTeam(v === "__none__" ? "" : v)}
+                >
+                  <SelectTrigger className="bg-background border-border">
+                    <SelectValue placeholder="Select a Premier League team" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No favourite team yet</SelectItem>
+                    {[...PREMIER_LEAGUE_TEAMS].sort((a, b) => a.localeCompare(b)).map((team) => (
+                      <SelectItem key={team} value={team}>
+                        {team}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               {msg && (
                 <p className="text-sm text-destructive" role="alert">

@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Vote } from "lucide-react";
 import { TeamLogo } from "@/components/play/TeamLogo";
+import { UserAvatar } from "@/components/avatar/UserAvatar";
 import { FixtureCommunityStats } from "@/components/play/FixtureCommunityStats";
 import type { GotwHistoryEntry } from "@/lib/game-of-the-week-history";
 import { FaXmark } from "react-icons/fa6";
@@ -48,6 +49,7 @@ type Props = {
   gotwEntries?: GotwHistoryEntry[];
   gotwLoading?: boolean;
   gotwError?: string | null;
+  titleAvatarTeam?: string | null;
 };
 
 const MAX_GW = 38;
@@ -83,6 +85,7 @@ export function HistoryView({
   gotwEntries = [],
   gotwLoading = false,
   gotwError = null,
+  titleAvatarTeam = null,
 }: Props) {
   const [gwInput, setGwInput] = useState(String(selectedGameweek));
   const [historyTab, setHistoryTab] = useState<"matches" | "bonuses" | "gotw">("matches");
@@ -147,7 +150,10 @@ export function HistoryView({
           <span className="font-semibold text-foreground max-sm:text-sm">Scoreline</span>
         </div>
 
-        <h1 className="mb-4 text-xl font-bold text-foreground max-sm:mb-3 max-sm:text-lg sm:mb-6 sm:text-2xl">{title}</h1>
+        <div className="mb-4 flex items-center gap-2 max-sm:mb-3 sm:mb-6">
+          <UserAvatar favouriteTeam={titleAvatarTeam} size={28} />
+          <h1 className="text-xl font-bold text-foreground max-sm:text-lg sm:text-2xl">{title}</h1>
+        </div>
 
         <div className="flex flex-col gap-4 max-sm:gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
           <div>

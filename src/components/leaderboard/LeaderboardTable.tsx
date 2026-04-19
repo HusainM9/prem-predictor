@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { UserAvatar } from "@/components/avatar/UserAvatar";
 
 export type LeaderboardEntry = {
   rank: number;
   user_id: string;
   display_name: string;
+  favourite_team?: string | null;
   total_points: number;
   accuracy?: number;
   correct_scores?: number;
@@ -84,8 +86,9 @@ export function LeaderboardTable({ entries, currentUserId, title = "Leaderboard"
                       <td className="min-w-0 py-2 px-2 max-sm:py-2 max-sm:px-2 sm:py-3 sm:px-4">
                         <Link
                           href={`/player/${e.user_id}`}
-                          className="flex items-center no-underline text-foreground hover:text-primary transition-colors"
+                          className="flex items-center gap-2 no-underline text-foreground hover:text-primary transition-colors"
                         >
+                          <UserAvatar favouriteTeam={e.favourite_team ?? null} size={22} />
                           <span className={cn("truncate font-medium", isYou && "font-semibold")}>
                             {isYou ? "You" : (e.display_name ?? `User ${e.user_id.slice(0, 8)}…`)}
                           </span>

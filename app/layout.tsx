@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { ThemeProvider } from "@/components/them-prov";
+import { RecoveryRedirect } from "@/components/auth/RecoveryRedirect";
+import { FavouriteTeamPrompt } from "@/components/auth/FavouriteTeamPrompt";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,6 +33,8 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased bg-background text-foreground min-h-screen overflow-x-hidden`}
       >
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+          <RecoveryRedirect />
+          <FavouriteTeamPrompt />
           <Navbar />
           {children}
         </ThemeProvider>
