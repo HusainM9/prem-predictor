@@ -122,6 +122,7 @@ export default function HistoryPage() {
       gotwEntries={gotwEntries}
       gotwLoading={gotwLoading}
       gotwError={gotwError}
+      enablePredictionReactions={false}
     />
   );
 }

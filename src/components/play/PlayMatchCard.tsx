@@ -25,6 +25,30 @@ export type PlayFixtureRow = {
   odds_away_current: number | null;
   odds_current_updated_at: string | null;
   odds_current_bookmaker: string | null;
+  form?: {
+    home_team: {
+      team: string;
+      last_five: Array<{
+        kickoff_time: string;
+        team: string;
+        opponent: string;
+        goals_for: number;
+        goals_against: number;
+        result: "W" | "D" | "L";
+      }>;
+    };
+    away_team: {
+      team: string;
+      last_five: Array<{
+        kickoff_time: string;
+        team: string;
+        opponent: string;
+        goals_for: number;
+        goals_against: number;
+        result: "W" | "D" | "L";
+      }>;
+    };
+  };
 };
 
 export type PredictionMeta = {
@@ -42,6 +66,19 @@ function derivedPick(hg: number, ag: number): Pick {
 function parseGoal(s: string | undefined): number {
   const t = (s ?? "").trim();
   return t === "" ? 0 : Number(t);
+}
+
+function formDotClass(result: "W" | "D" | "L"): string {
+  if (result === "W") return "bg-emerald-500";
+  if (result === "L") return "bg-red-500";
+  return "bg-muted-foreground/60";
+}
+
+function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+  });
 }
 
 type Props = {
@@ -155,6 +192,8 @@ export function PlayMatchCard({
     ag === agActual;
 
   const settled = !!meta?.settled_at;
+  const homeForm = f.form?.home_team ?? { team: f.home_team, last_five: [] };
+  const awayForm = f.form?.away_team ?? { team: f.away_team, last_five: [] };
 
   return (
     <div className={`rounded-lg border border-border bg-card p-4 pl-5 border-l-4 ${barColor}`}>
@@ -206,7 +245,13 @@ export function PlayMatchCard({
             <span className="text-xs text-muted-foreground">Awaiting settlement</span>
           )}
           {settled && (
-            <span className="text-xs font-medium text-primary">
+            <span
+              className={`text-xs font-medium ${
+                (meta?.points_awarded ?? 0) + (meta?.bonus_exact_score_points ?? 0) < 0
+                  ? "text-destructive"
+                  : "text-primary"
+              }`}
+            >
               {(meta?.points_awarded ?? 0) + (meta?.bonus_exact_score_points ?? 0)} pts
             </span>
           )}
@@ -261,6 +306,69 @@ export function PlayMatchCard({
         />
         <div className="flex min-w-[64px] shrink items-center justify-start max-sm:min-w-[64px] sm:min-w-[72px]">
           <TeamDisplay teamName={f.away_team} size={32} align="start" layout="abbr" />
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+          <p className="font-medium text-foreground/90">{homeForm.team} form</p>
+          <div className="mt-2 flex items-center gap-1.5">
+            {homeForm.last_five.length === 0 ? (
+              <span className="text-[11px] text-muted-foreground">No recent matches</span>
+            ) : (
+              homeForm.last_five.map((m, idx) => (
+                <span
+                  key={`${f.id}-home-form-dot-${idx}`}
+                  className={`inline-block h-2.5 w-2.5 rounded-full ${formDotClass(m.result)}`}
+                  title={`${m.result}: ${m.team} ${m.goals_for}-${m.goals_against} ${m.opponent}`}
+                />
+              ))
+            )}
+          </div>
+          {homeForm.last_five.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-foreground/90 hover:text-foreground">
+                Last 5 matches
+              </summary>
+              <ul className="mt-2 space-y-1.5">
+                {homeForm.last_five.map((m, idx) => (
+                  <li key={`${f.id}-home-form-${idx}`} className="text-[11px] sm:text-xs">
+                    {formatShortDate(m.kickoff_time)} · {m.team} {m.goals_for}-{m.goals_against} {m.opponent}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+        <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground text-right">
+          <p className="font-medium text-foreground/90">{awayForm.team} form</p>
+          <div className="mt-2 flex items-center justify-end gap-1.5">
+            {awayForm.last_five.length === 0 ? (
+              <span className="text-[11px] text-muted-foreground">No recent matches</span>
+            ) : (
+              awayForm.last_five.map((m, idx) => (
+                <span
+                  key={`${f.id}-away-form-dot-${idx}`}
+                  className={`inline-block h-2.5 w-2.5 rounded-full ${formDotClass(m.result)}`}
+                  title={`${m.result}: ${m.team} ${m.goals_for}-${m.goals_against} ${m.opponent}`}
+                />
+              ))
+            )}
+          </div>
+          {awayForm.last_five.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-foreground/90 hover:text-foreground">
+                Last 5 matches
+              </summary>
+              <ul className="mt-2 space-y-1.5">
+                {awayForm.last_five.map((m, idx) => (
+                  <li key={`${f.id}-away-form-${idx}`} className="text-[11px] sm:text-xs">
+                    {formatShortDate(m.kickoff_time)} · {m.team} {m.goals_for}-{m.goals_against} {m.opponent}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </div>
       </div>
 

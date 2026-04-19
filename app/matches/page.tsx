@@ -5,6 +5,9 @@ import Link from "next/link";
 import { TeamDisplay } from "@/components/TeamDisplay";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/lib/supabase/client";
+import { useReactions } from "@/hooks/useReactions";
+import { MatchReactionPanel } from "@/components/reactions/MatchReactionPanel";
 
 type Fixture = {
   id: string;
@@ -16,7 +19,43 @@ type Fixture = {
   home_goals: number | null;
   away_goals: number | null;
   is_stuck?: boolean;
+  form?: {
+    home_team: {
+      team: string;
+      last_five: Array<{
+        kickoff_time: string;
+        team: string;
+        opponent: string;
+        goals_for: number;
+        goals_against: number;
+        result: "W" | "D" | "L";
+      }>;
+    };
+    away_team: {
+      team: string;
+      last_five: Array<{
+        kickoff_time: string;
+        team: string;
+        opponent: string;
+        goals_for: number;
+        goals_against: number;
+        result: "W" | "D" | "L";
+      }>;
+    };
+  };
 };
+
+type TeamForm = {
+  team: string;
+  last_five: Array<{
+      kickoff_time: string;
+      team: string;
+      opponent: string;
+      goals_for: number;
+      goals_against: number;
+      result: "W" | "D" | "L";
+    }>;
+  };
 
 function hasScore(f: Fixture): boolean {
   const h = f.home_goals;
@@ -38,6 +77,20 @@ function formatDateHeader(iso: string): string {
     day: "numeric",
     month: "long",
   });
+}
+
+function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formDotClass(result: "W" | "D" | "L"): string {
+  if (result === "W") return "bg-emerald-500";
+  if (result === "L") return "bg-red-500";
+  return "bg-muted-foreground/60";
 }
 
 function dateKey(iso: string): string {
@@ -69,6 +122,7 @@ export default function MatchesPage() {
   const [minGw, setMinGw] = useState<number>(1);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [canReact, setCanReact] = useState(false);
   const gwRef = useRef<number | null>(null);
   useEffect(() => {
     gwRef.current = gw;
@@ -116,6 +170,18 @@ export default function MatchesPage() {
     const t = setInterval(() => load(false), POLL_INTERVAL_MS);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setCanReact(!!data.session);
+    });
+  }, []);
+
+  const reactionTargetIds = useMemo(() => fixtures.map((f) => f.id), [fixtures]);
+  const { summaryById, pendingById, react, message: reactionMessage } = useReactions(
+    "match",
+    reactionTargetIds
+  );
 
   const canGoPrev = gw != null && minGw != null && gw > minGw;
   const canGoNext = gw != null && currentGw != null && gw < currentGw;
@@ -213,79 +279,119 @@ export default function MatchesPage() {
                 <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground max-sm:mb-2 max-sm:text-xs sm:mb-3 sm:text-sm">
                   {dateLabel}
                 </h2>
-                <div className="rounded-lg border border-border bg-card overflow-hidden max-sm:rounded-md">
-                  <div className="overflow-x-auto -mx-px">
-                    <table className="w-full min-w-0 table-fixed text-xs max-sm:text-xs sm:min-w-[400px] sm:text-sm">
-                      <thead>
-                        <tr className="border-b border-border bg-muted/50">
-                          <th className="w-14 py-2 pl-2 pr-1 text-left font-semibold text-foreground whitespace-nowrap max-sm:w-12 max-sm:py-2 max-sm:pl-2 sm:w-24 sm:py-3 sm:pl-4 sm:pr-4">
-                            Kick-off
-                          </th>
-                          <th className="w-14 py-2 px-1 text-left font-semibold text-foreground max-sm:w-12 max-sm:py-2 max-sm:px-1 sm:w-20 sm:py-3 sm:px-3">
-                            Status
-                          </th>
-                          <th className="w-[22%] py-2 px-1 text-right font-semibold text-foreground max-sm:py-2 max-sm:px-1 sm:py-3 sm:px-3">
-                            Home
-                          </th>
-                          <th className="w-14 py-2 px-1 text-center font-semibold text-foreground max-sm:w-12 max-sm:py-2 max-sm:px-1 sm:w-24 sm:py-3 sm:px-4">
-                            Score
-                          </th>
-                          <th className="w-[22%] py-2 pl-1 pr-2 text-left font-semibold text-foreground max-sm:py-2 max-sm:pl-1 max-sm:pr-2 sm:py-3 sm:pl-3 sm:pr-4">
-                            Away
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {list.map((f) => {
-                          const live = isLive(f);
-                          return (
-                            <tr
-                              key={f.id}
-                              className={`border-b border-border last:border-b-0 ${
-                                live ? "bg-primary/10" : ""
-                              }`}
-                            >
-                              <td className="py-2 pl-2 pr-1 text-muted-foreground whitespace-nowrap max-sm:py-2 max-sm:pl-2 max-sm:pr-1 max-sm:text-[11px] sm:py-3 sm:pl-4 sm:pr-3 sm:text-sm">
-                                {formatTime(f.kickoff_time)}
-                              </td>
-                              <td className="py-2 px-1 max-sm:py-2 max-sm:px-1 max-sm:text-[11px] sm:py-3 sm:px-3 sm:text-sm">
-                                {f.is_stuck && !hasScore(f) ? (
-                                  <span className="text-muted-foreground text-[10px] italic max-sm:text-[10px] sm:text-xs" title="Kickoff passed but provider has not returned final result">
-                                    Awaiting result
-                                  </span>
-                                ) : (
+                <div className="space-y-3">
+                  {list.map((f) => {
+                    const live = isLive(f);
+                    const scoreText = hasScore(f)
+                      ? `${Number(f.home_goals)} - ${Number(f.away_goals)}`
+                      : "–";
+                    const homeForm: TeamForm = f.form?.home_team ?? { team: f.home_team, last_five: [] };
+                    const awayForm: TeamForm = f.form?.away_team ?? { team: f.away_team, last_five: [] };
+                    return (
+                      <article
+                        key={f.id}
+                        className={`rounded-lg border border-border bg-card p-4 ${
+                          live ? "ring-1 ring-primary/35" : ""
+                        }`}
+                      >
+                        <div className="mb-3 flex items-center justify-between gap-2">
+                          <div className="text-xs text-muted-foreground">
+                            {formatTime(f.kickoff_time)}
+                          </div>
+                          <div className={live ? "text-xs font-medium text-primary" : "text-xs text-muted-foreground"}>
+                            {f.is_stuck && !hasScore(f) ? "Awaiting result" : displayStatus(f)}
+                          </div>
+                        </div>
+
+                        <div className="mb-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                          <TeamDisplay teamName={f.home_team} size={28} align="end" />
+                          <div className="rounded-md border border-border bg-muted/30 px-3 py-1 text-sm font-bold text-foreground">
+                            {scoreText}
+                          </div>
+                          <TeamDisplay teamName={f.away_team} size={28} align="start" />
+                        </div>
+
+                        <div className="mb-3 grid grid-cols-2 gap-3">
+                          <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                            <p className="font-medium text-foreground/90">{homeForm.team} form</p>
+                            <div className="mt-2 flex items-center gap-1.5">
+                              {homeForm.last_five.length === 0 ? (
+                                <span className="text-[11px] text-muted-foreground">No recent matches</span>
+                              ) : (
+                                homeForm.last_five.map((m, idx) => (
                                   <span
-                                    className={
-                                      live
-                                        ? "text-primary font-medium"
-                                        : "text-muted-foreground"
-                                    }
-                                  >
-                                    {displayStatus(f)}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-2 px-1 max-sm:py-2 max-sm:px-1 sm:py-3 sm:px-3">
-                                <TeamDisplay teamName={f.home_team} size={20} align="end" />
-                              </td>
-                              <td className="py-2 px-1 text-center font-bold text-foreground max-sm:py-2 max-sm:px-1 max-sm:text-xs sm:py-3 sm:px-4 sm:text-sm">
-                                {hasScore(f)
-                                  ? `${Number(f.home_goals)} – ${Number(f.away_goals)}`
-                                  : "–"}
-                              </td>
-                              <td className="py-2 pl-1 pr-2 max-sm:py-2 max-sm:pl-1 max-sm:pr-2 sm:py-3 sm:pl-3 sm:pr-4">
-                                <TeamDisplay teamName={f.away_team} size={20} align="start" />
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                                    key={`${f.id}-home-form-dot-${idx}`}
+                                    className={`inline-block h-2.5 w-2.5 rounded-full ${formDotClass(m.result)}`}
+                                    title={`${m.result}: ${m.team} ${m.goals_for}-${m.goals_against} ${m.opponent}`}
+                                  />
+                                ))
+                              )}
+                            </div>
+                            {homeForm.last_five.length > 0 && (
+                              <details className="mt-2">
+                                <summary className="cursor-pointer text-foreground/90 hover:text-foreground">
+                                  Last 5 matches
+                                </summary>
+                                <ul className="mt-2 space-y-1.5">
+                                  {homeForm.last_five.map((m, idx) => (
+                                    <li key={`${f.id}-home-form-${idx}`} className="text-[11px] sm:text-xs">
+                                      {formatShortDate(m.kickoff_time)} · {m.team} {m.goals_for}-{m.goals_against} {m.opponent}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </details>
+                            )}
+                          </div>
+                          <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground text-right">
+                            <p className="font-medium text-foreground/90">{awayForm.team} form</p>
+                            <div className="mt-2 flex items-center justify-end gap-1.5">
+                              {awayForm.last_five.length === 0 ? (
+                                <span className="text-[11px] text-muted-foreground">No recent matches</span>
+                              ) : (
+                                awayForm.last_five.map((m, idx) => (
+                                  <span
+                                    key={`${f.id}-away-form-dot-${idx}`}
+                                    className={`inline-block h-2.5 w-2.5 rounded-full ${formDotClass(m.result)}`}
+                                    title={`${m.result}: ${m.team} ${m.goals_for}-${m.goals_against} ${m.opponent}`}
+                                  />
+                                ))
+                              )}
+                            </div>
+                            {awayForm.last_five.length > 0 && (
+                              <details className="mt-2">
+                                <summary className="cursor-pointer text-foreground/90 hover:text-foreground">
+                                  Last 5 matches
+                                </summary>
+                                <ul className="mt-2 space-y-1.5">
+                                  {awayForm.last_five.map((m, idx) => (
+                                    <li key={`${f.id}-away-form-${idx}`} className="text-[11px] sm:text-xs">
+                                      {formatShortDate(m.kickoff_time)} · {m.team} {m.goals_for}-{m.goals_against} {m.opponent}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </details>
+                            )}
+                          </div>
+                        </div>
+
+                        <MatchReactionPanel
+                          summary={summaryById[f.id]}
+                          pending={pendingById[f.id]}
+                          disabled={!canReact}
+                          onReact={(emoji) => {
+                            void react(f.id, emoji);
+                          }}
+                        />
+                      </article>
+                    );
+                  })}
                 </div>
               </section>
             ))}
           </div>
+        )}
+        {reactionMessage && (
+          <p className="mt-3 text-sm text-muted-foreground">{reactionMessage}</p>
         )}
       </div>
     </main>

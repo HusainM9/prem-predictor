@@ -165,12 +165,30 @@ export default function PlayPage() {
         }
       }
       combined.sort((a, b) => a.kickoff_time.localeCompare(b.kickoff_time));
-      setFixtures(combined);
+      let combinedWithForm = combined;
+      if (combined.length > 0) {
+        const fixtureIds = combined.map((f) => f.id).join(",");
+        try {
+          const formRes = await fetch(
+            `/api/matches/form?fixtureIds=${encodeURIComponent(fixtureIds)}`
+          );
+          const formData = await formRes.json().catch(() => ({}));
+          if (formRes.ok && formData.forms && typeof formData.forms === "object") {
+            const forms = formData.forms as Record<string, PlayFixtureRow["form"]>;
+            combinedWithForm = combined.map((f) => ({
+              ...f,
+              form: forms[f.id] ?? f.form,
+            }));
+          }
+        } catch {
+        }
+      }
+      setFixtures(combinedWithForm);
       setLoading(false);
 
       const { data: { session } } = await sessionPromise;
-      if (session?.access_token && combined.length > 0) {
-        const fixtureIds = combined.map((f) => f.id).join(",");
+      if (session?.access_token && combinedWithForm.length > 0) {
+        const fixtureIds = combinedWithForm.map((f) => f.id).join(",");
         try {
           const res = await fetch(
             `/api/predictions/for-fixtures?fixtureIds=${encodeURIComponent(fixtureIds)}`,

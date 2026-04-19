@@ -56,11 +56,18 @@ export default function PlayerPredictionsPage() {
   const [predictions, setPredictions] = useState<PredictionItem[]>([]);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [favouriteTeam, setFavouriteTeam] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [totalPoints, setTotalPoints] = useState(0);
   const [currentGameweek, setCurrentGameweek] = useState<number | null>(null);
   const [selectedGameweek, setSelectedGameweek] = useState<number>(1);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setCurrentUserId(data.user?.id ?? null);
+    });
+  }, []);
 
   useEffect(() => {
     if (!userId) {
@@ -176,6 +183,7 @@ export default function PlayerPredictionsPage() {
       predictionsForGw={predictionsForGw}
       gameweekPoints={gameweekPoints}
       titleAvatarTeam={favouriteTeam}
+      enablePredictionReactions={currentUserId !== userId}
     />
   );
 }

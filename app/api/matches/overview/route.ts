@@ -15,7 +15,94 @@ type Fixture = {
   home_goals: number | null;
   away_goals: number | null;
   is_stuck?: boolean;
+  form?: {
+    home_team: TeamForm;
+    away_team: TeamForm;
+  };
 };
+
+type TeamRecentMatch = {
+  kickoff_time: string;
+  team: string;
+  opponent: string;
+  goals_for: number;
+  goals_against: number;
+  result: "W" | "D" | "L";
+};
+
+type TeamForm = {
+  team: string;
+  last_five: TeamRecentMatch[];
+};
+
+async function getRecentMatchesForTeam(
+  supabase: ReturnType<typeof createClient>,
+  team: string,
+  beforeKickoffIso: string
+): Promise<TeamRecentMatch[]> {
+  const baseSelect =
+    "kickoff_time,home_team,away_team,home_goals,away_goals,status";
+  const { data } = await supabase
+    .from("fixtures")
+    .select(baseSelect)
+    .or(`home_team.eq.${team},away_team.eq.${team}`)
+    .lt("kickoff_time", beforeKickoffIso)
+    .eq("status", "finished")
+    .order("kickoff_time", { ascending: false })
+    .limit(15);
+
+  const rows = (data ?? [])
+    .filter(
+      (row) =>
+        row.home_goals != null &&
+        row.away_goals != null &&
+        Number.isInteger(Number(row.home_goals)) &&
+        Number.isInteger(Number(row.away_goals))
+    );
+
+  const recent: TeamRecentMatch[] = [];
+  for (const row of rows) {
+    const homeGoals = Number(row.home_goals);
+    const awayGoals = Number(row.away_goals);
+    const isHome = row.home_team === team;
+    const goalsFor = isHome ? homeGoals : awayGoals;
+    const goalsAgainst = isHome ? awayGoals : homeGoals;
+    const opponent = isHome ? row.away_team : row.home_team;
+    const result: "W" | "D" | "L" =
+      goalsFor > goalsAgainst ? "W" : goalsFor < goalsAgainst ? "L" : "D";
+    recent.push({
+      kickoff_time: row.kickoff_time,
+      team,
+      opponent,
+      goals_for: goalsFor,
+      goals_against: goalsAgainst,
+      result,
+    });
+    if (recent.length === 5) break;
+  }
+
+  return recent;
+}
+
+async function getFixtureForm(
+  supabase: ReturnType<typeof createClient>,
+  fixture: Fixture
+): Promise<Fixture["form"]> {
+  const [homeRecent, awayRecent] = await Promise.all([
+    getRecentMatchesForTeam(supabase, fixture.home_team, fixture.kickoff_time),
+    getRecentMatchesForTeam(supabase, fixture.away_team, fixture.kickoff_time),
+  ]);
+  return {
+    home_team: {
+      team: fixture.home_team,
+      last_five: homeRecent,
+    },
+    away_team: {
+      team: fixture.away_team,
+      last_five: awayRecent,
+    },
+  };
+}
 
 /** Hide from Scoreline list: postponed/cancelled, invalid kickoff, or TBD 00:00:00 UTC (any non-finished status). */
 function shouldHideFromMatchesOverview(f: { kickoff_time: string; status: string }): boolean {
@@ -155,9 +242,12 @@ export async function GET(req: Request) {
     combined.sort((a, b) => a.kickoff_time.localeCompare(b.kickoff_time));
 
     const visible = combined.filter((f) => !shouldHideFromMatchesOverview(f));
+    const visibleWithForm = await Promise.all(
+      visible.map(async (f) => ({ ...f, form: await getFixtureForm(supabase, f) }))
+    );
 
     return NextResponse.json({
-      fixtures: visible,
+      fixtures: visibleWithForm,
       current_gameweek: computedCurrentGw,
       min_gameweek: minGwInDb,
       viewing_gameweek: viewingGw,

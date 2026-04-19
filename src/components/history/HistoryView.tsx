@@ -6,6 +6,8 @@ import { Vote } from "lucide-react";
 import { TeamLogo } from "@/components/play/TeamLogo";
 import { UserAvatar } from "@/components/avatar/UserAvatar";
 import { FixtureCommunityStats } from "@/components/play/FixtureCommunityStats";
+import { useReactions } from "@/hooks/useReactions";
+import { ReactionBar } from "@/components/reactions/ReactionBar";
 import type { GotwHistoryEntry } from "@/lib/game-of-the-week-history";
 import { FaXmark } from "react-icons/fa6";
 import { FaCheck } from "react-icons/fa";
@@ -50,6 +52,7 @@ type Props = {
   gotwLoading?: boolean;
   gotwError?: string | null;
   titleAvatarTeam?: string | null;
+  enablePredictionReactions?: boolean;
 };
 
 const MAX_GW = 38;
@@ -86,9 +89,17 @@ export function HistoryView({
   gotwLoading = false,
   gotwError = null,
   titleAvatarTeam = null,
+  enablePredictionReactions = true,
 }: Props) {
   const [gwInput, setGwInput] = useState(String(selectedGameweek));
   const [historyTab, setHistoryTab] = useState<"matches" | "bonuses" | "gotw">("matches");
+  const predictionIds = predictionsForGw.map((p) => p.prediction_id);
+  const {
+    summaryById: reactionSummaryById,
+    pendingById: reactionPendingById,
+    react: reactToPrediction,
+    message: reactionMessage,
+  } = useReactions("prediction", predictionIds);
   useEffect(() => {
     setGwInput(String(selectedGameweek));
   }, [selectedGameweek]);
@@ -392,6 +403,17 @@ export function HistoryView({
                             </>
                           )}
                         </div>
+                        {enablePredictionReactions && (
+                          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                            <ReactionBar
+                              summary={reactionSummaryById[p.prediction_id]}
+                              pending={reactionPendingById[p.prediction_id]}
+                              onReact={(emoji) => {
+                                void reactToPrediction(p.prediction_id, emoji);
+                              }}
+                            />
+                          </div>
+                        )}
                         <FixtureCommunityStats fixtureId={p.fixture_id} enabled={hasFinalScore} />
                       </>
                     ) : (
@@ -413,6 +435,9 @@ export function HistoryView({
             Upcoming fixtures may appear with predictions hidden depending on that player&apos;s privacy settings. Past
             results show as usual. Switch gameweeks to view other rounds.
           </p>
+          {reactionMessage && (
+            <p className="mt-2 text-sm text-muted-foreground">{reactionMessage}</p>
+          )}
         </section>
         )}
 
