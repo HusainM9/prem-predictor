@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import { LeaderboardTable, type LeaderboardEntry } from "@/components/leaderboard/LeaderboardTable";
+import { ChatPanel } from "@/components/chat/ChatPanel";
 
 const PAGE_SIZE = 50;
 
@@ -249,6 +250,9 @@ export default function LeagueDetailPage() {
                 Showing top {PAGE_SIZE} of {totalCount}. Use the main Leaderboard page to search or filter by gameweek.
               </p>
             )}
+            <div className="mt-8">
+              <ChatPanel scope="league" leagueId={leagueId} title={`${leagueName} chat`} />
+            </div>
           </>
         )}
       </div>

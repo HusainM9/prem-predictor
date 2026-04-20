@@ -23,13 +23,22 @@ type FixtureForm = {
   away_team: TeamForm;
 };
 
+type FixtureScoreRow = {
+  kickoff_time: string;
+  home_team: string;
+  away_team: string;
+  home_goals: number | null;
+  away_goals: number | null;
+  status: string;
+};
+
 function parseFixtureIds(param: string | null): string[] {
   if (!param) return [];
   return [...new Set(param.split(",").map((x) => x.trim()).filter((x) => UUID_REGEX.test(x)))];
 }
 
 async function getRecentMatchesForTeam(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   team: string,
   beforeKickoffIso: string
 ): Promise<TeamRecentMatch[]> {
@@ -42,8 +51,8 @@ async function getRecentMatchesForTeam(
     .order("kickoff_time", { ascending: false })
     .limit(15);
 
-  const rows = (data ?? []).filter(
-    (row) =>
+  const rows = ((data ?? []) as FixtureScoreRow[]).filter(
+    (row): row is FixtureScoreRow & { home_goals: number; away_goals: number } =>
       row.home_goals != null &&
       row.away_goals != null &&
       Number.isInteger(Number(row.home_goals)) &&

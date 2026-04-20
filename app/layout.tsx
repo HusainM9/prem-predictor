@@ -5,6 +5,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { ThemeProvider } from "@/components/them-prov";
 import { RecoveryRedirect } from "@/components/auth/RecoveryRedirect";
 import { FavouriteTeamPrompt } from "@/components/auth/FavouriteTeamPrompt";
+import { GlobalChatLauncher } from "@/components/chat/GlobalChatLauncher";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,6 +38,7 @@ export default function RootLayout({
           <FavouriteTeamPrompt />
           <Navbar />
           {children}
+          <GlobalChatLauncher />
         </ThemeProvider>
       </body>
     </html>
