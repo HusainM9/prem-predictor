@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/avatar/UserAvatar";
+import { ReactionBar } from "@/components/reactions/ReactionBar";
 import { supabase } from "@/lib/supabase/client";
 import {
   useChatMessages,
@@ -11,6 +12,7 @@ import {
   type ShareablePrediction,
   type ChatMessage,
 } from "@/hooks/useChatMessages";
+import { useReactions } from "@/hooks/useReactions";
 
 type ChatPanelProps = {
   scope: ChatScope;
@@ -45,6 +47,10 @@ function formatShortDate(iso: string): string {
 function formatScore(home: number | null, away: number | null): string {
   if (home == null || away == null) return "Pending";
   return `${home}-${away}`;
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 export function ChatPanel({
@@ -82,6 +88,12 @@ export function ChatPanel({
     () => [...messages].sort((a, b) => a.created_at.localeCompare(b.created_at)),
     [messages]
   );
+  const messageIds = useMemo(() => ordered.map((m) => m.id), [ordered]);
+  const {
+    summaryById: messageReactionSummaryById,
+    pendingById: messageReactionPendingById,
+    react: reactToMessage,
+  } = useReactions("chat_message", messageIds);
 
   useEffect(() => {
     if (scope !== "league" || !leagueId) return;
@@ -273,6 +285,16 @@ export function ChatPanel({
               {m.failed ? " (failed)" : ""}
             </p>
             {renderPredictionCard(m)}
+            <ReactionBar
+              summary={messageReactionSummaryById[m.id]}
+              pending={!!messageReactionPendingById[m.id]}
+              disabled={m.pending || !isUuid(m.id)}
+              onReact={(emoji) => {
+                void reactToMessage(m.id, emoji);
+              }}
+              compact
+              className="mt-2"
+            />
           </article>
         ))}
       </div>

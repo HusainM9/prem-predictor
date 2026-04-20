@@ -177,6 +177,17 @@ export async function POST(req: Request) {
       }
     }
 
+    if (targetType === "chat_message") {
+      const { data: message } = await supabase
+        .from("messages")
+        .select("id")
+        .eq("id", targetId)
+        .maybeSingle();
+      if (!message) {
+        return NextResponse.json({ error: "Message not found" }, { status: 404 });
+      }
+    }
+
     const { data: existing, error: existingErr } = await supabase
       .from("reactions")
       .select("id, emoji")

@@ -1,6 +1,6 @@
 export const QUICK_REACTION_EMOJIS = ["🔥", "😬", "😂", "👏", "💀"] as const;
 
-export type ReactionTargetType = "match" | "prediction";
+export type ReactionTargetType = "match" | "prediction" | "chat_message";
 
 export type ReactionSummary = {
   counts: Record<string, number>;
@@ -22,6 +22,6 @@ export function isValidReactionEmojiInput(value: string): boolean {
 }
 
 export function isValidReactionTargetType(value: string): value is ReactionTargetType {
-  return value === "match" || value === "prediction";
+  return value === "match" || value === "prediction" || value === "chat_message";
 }
 
