@@ -120,8 +120,8 @@ export function PlayMatchCard({
   const kickoffMs = new Date(f.kickoff_time).getTime();
   const kickoffPassed = kickoffMs <= nowMs;
   const isScheduled = statusLower === "scheduled";
-  /** Editable until odds lock or kickoff — after lock, card is read-only with saved line. */
-  const editable = isScheduled && !kickoffPassed && !locked;
+  /** Editable until kickoff. When odds are locked, the line is frozen for scoring but picks can still be changed. */
+  const editable = isScheduled && !kickoffPassed;
 
   const hgActual = f.home_goals;
   const agActual = f.away_goals;
@@ -375,8 +375,8 @@ export function PlayMatchCard({
       <p className="mt-2 text-center text-xs text-muted-foreground">
         {kickoffPassed && !hasFinalScore
           ? "Match in progress or result pending."
-          : !kickoffPassed && locked && !editable
-            ? "Odds locked — prediction saved as entered."
+          : !kickoffPassed && locked
+            ? "Odds locked — line frozen for points. You can still update your score until kickoff."
             : null}
       </p>
 

@@ -342,8 +342,7 @@ export default function PlayPage() {
   function isFixtureEditable(f: PlayFixtureRow): boolean {
     const statusLower = (f.status ?? "").toLowerCase();
     const kickoffPassed = new Date(f.kickoff_time).getTime() <= Date.now();
-    const locked = !!f.odds_locked_at;
-    return statusLower === "scheduled" && !kickoffPassed && !locked;
+    return statusLower === "scheduled" && !kickoffPassed;
   }
 
   async function saveAll() {
