@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { buildPredictionSharePayload, type ShareablePredictionRow } from "@/lib/chat/prediction-share";
 import { validateChatText } from "@/lib/chat/moderation";
+import { getChatMessageRetentionMs, getChatMessagesNotBeforeIso } from "@/lib/chat/retention";
 
 type Scope = "general" | "league";
 
@@ -156,9 +157,12 @@ export async function GET(req: Request) {
       if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    const notBeforeIso = getChatMessagesNotBeforeIso();
+
     let query = supabase
       .from("messages")
       .select("id,user_id,league_id,message_type,text,prediction_payload,created_at")
+      .gte("created_at", notBeforeIso)
       .order("created_at", { ascending: false })
       .limit(limit);
 
@@ -198,6 +202,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       messages: normalizeMessageRows(ordered, profileByUser),
+      retention: { maxAgeMs: getChatMessageRetentionMs() },
     });
   } catch (err: unknown) {
     return NextResponse.json(

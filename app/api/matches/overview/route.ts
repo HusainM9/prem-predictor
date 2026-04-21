@@ -5,6 +5,17 @@ const SEASON = "2025/26";
 const HOURS_AFTER_LAST_MATCH_BEFORE_NEXT_GW = 24;
 const MATCH_END_OFFSET_MS = 2 * 60 * 60 * 1000;
 
+/** Statuses for matches that are live (not on the pre-kick "scheduled" row). */
+const IN_PLAY_STATUSES: string[] = [
+  "in_play",
+  "inplay",
+  "1h",
+  "2h",
+  "ht",
+  "live",
+  "paused",
+];
+
 type Fixture = {
   id: string;
   kickoff_time: string;
@@ -15,105 +26,14 @@ type Fixture = {
   home_goals: number | null;
   away_goals: number | null;
   is_stuck?: boolean;
-  form?: {
-    home_team: TeamForm;
-    away_team: TeamForm;
-  };
 };
 
-type TeamRecentMatch = {
-  kickoff_time: string;
-  team: string;
-  opponent: string;
-  goals_for: number;
-  goals_against: number;
-  result: "W" | "D" | "L";
-};
-
-type TeamForm = {
-  team: string;
-  last_five: TeamRecentMatch[];
-};
-
-type FixtureScoreRow = {
-  kickoff_time: string;
-  home_team: string;
-  away_team: string;
-  home_goals: number | null;
-  away_goals: number | null;
-  status: string;
-};
-
-async function getRecentMatchesForTeam(
-  supabase: any,
-  team: string,
-  beforeKickoffIso: string
-): Promise<TeamRecentMatch[]> {
-  const baseSelect =
-    "kickoff_time,home_team,away_team,home_goals,away_goals,status";
-  const { data } = await supabase
-    .from("fixtures")
-    .select(baseSelect)
-    .or(`home_team.eq.${team},away_team.eq.${team}`)
-    .lt("kickoff_time", beforeKickoffIso)
-    .eq("status", "finished")
-    .order("kickoff_time", { ascending: false })
-    .limit(15);
-
-  const rows = ((data ?? []) as FixtureScoreRow[])
-    .filter(
-      (row): row is FixtureScoreRow & { home_goals: number; away_goals: number } =>
-        row.home_goals != null &&
-        row.away_goals != null &&
-        Number.isInteger(Number(row.home_goals)) &&
-        Number.isInteger(Number(row.away_goals))
-    );
-
-  const recent: TeamRecentMatch[] = [];
-  for (const row of rows) {
-    const homeGoals = Number(row.home_goals);
-    const awayGoals = Number(row.away_goals);
-    const isHome = row.home_team === team;
-    const goalsFor = isHome ? homeGoals : awayGoals;
-    const goalsAgainst = isHome ? awayGoals : homeGoals;
-    const opponent = isHome ? row.away_team : row.home_team;
-    const result: "W" | "D" | "L" =
-      goalsFor > goalsAgainst ? "W" : goalsFor < goalsAgainst ? "L" : "D";
-    recent.push({
-      kickoff_time: row.kickoff_time,
-      team,
-      opponent,
-      goals_for: goalsFor,
-      goals_against: goalsAgainst,
-      result,
-    });
-    if (recent.length === 5) break;
-  }
-
-  return recent;
+/** DB rows may use `finished` (sync) or `ft` (legacy / imports) — both mean full time. */
+function isFullTimeStatus(status: string | null | undefined): boolean {
+  const s = (status ?? "").toLowerCase();
+  return s === "finished" || s === "ft";
 }
 
-async function getFixtureForm(
-  supabase: any,
-  fixture: Fixture
-): Promise<Fixture["form"]> {
-  const [homeRecent, awayRecent] = await Promise.all([
-    getRecentMatchesForTeam(supabase, fixture.home_team, fixture.kickoff_time),
-    getRecentMatchesForTeam(supabase, fixture.away_team, fixture.kickoff_time),
-  ]);
-  return {
-    home_team: {
-      team: fixture.home_team,
-      last_five: homeRecent,
-    },
-    away_team: {
-      team: fixture.away_team,
-      last_five: awayRecent,
-    },
-  };
-}
-
-/** Hide from Scoreline list: postponed/cancelled, invalid kickoff, or TBD 00:00:00 UTC (any non-finished status). */
 function shouldHideFromMatchesOverview(f: { kickoff_time: string; status: string }): boolean {
   const s = (f.status ?? "").toLowerCase();
   if (s === "postponed" || s === "cancelled" || s === "canceled") return true;
@@ -127,7 +47,6 @@ function shouldHideFromMatchesOverview(f: { kickoff_time: string; status: string
     d.getUTCSeconds() === 0 &&
     d.getUTCMilliseconds() === 0;
   const finished = s === "finished" || s === "ft";
-  // Provider placeholder date; do not show as live (e.g. stale in_play) or upcoming.
   if (isMidnightUtc && !finished) return true;
 
   return false;
@@ -152,7 +71,7 @@ export async function GET(req: Request) {
     const nowIso = new Date().toISOString();
     const nowMs = Date.now();
 
-    const [nextRowRes, minRowRes] = await Promise.all([
+    const [nextRowRes, minRowRes, inPlayRes, lastRowRes] = await Promise.all([
       supabase
         .from("fixtures")
         .select("gameweek")
@@ -169,23 +88,54 @@ export async function GET(req: Request) {
         .order("gameweek", { ascending: true })
         .limit(1)
         .maybeSingle(),
-    ]);
-
-    let nextGw = nextRowRes.data?.gameweek ?? null;
-    if (nextGw == null) {
-      const { data: lastRow } = await supabase
+      supabase
+        .from("fixtures")
+        .select("gameweek")
+        .eq("season", SEASON)
+        .in("status", IN_PLAY_STATUSES)
+        .order("gameweek", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
         .from("fixtures")
         .select("gameweek")
         .eq("season", SEASON)
         .order("gameweek", { ascending: false })
         .limit(1)
-        .maybeSingle();
-      nextGw = lastRow?.gameweek ?? 1;
+        .maybeSingle(),
+    ]);
+
+    const scheduledNextGw = nextRowRes.data?.gameweek ?? null;
+    const liveMaxGw = inPlayRes.data?.gameweek ?? null;
+    const lastGwInDb = lastRowRes.data?.gameweek ?? 1;
+
+    let nextGw: number;
+    if (liveMaxGw != null && scheduledNextGw != null && scheduledNextGw > liveMaxGw) {
+      nextGw = liveMaxGw;
+    } else if (liveMaxGw != null && scheduledNextGw != null) {
+      nextGw = Math.max(scheduledNextGw, liveMaxGw);
+    } else {
+      nextGw = liveMaxGw ?? scheduledNextGw ?? lastGwInDb;
     }
+    if (nextGw < 1) nextGw = 1;
+
+    const hasLiveInNextGw = liveMaxGw != null && liveMaxGw === nextGw;
+    const { data: firstNextGwMatch } = await supabase
+      .from("fixtures")
+      .select("kickoff_time")
+      .eq("season", SEASON)
+      .eq("gameweek", nextGw)
+      .order("kickoff_time", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const nextGwStarted =
+      hasLiveInNextGw ||
+      (firstNextGwMatch?.kickoff_time != null &&
+        new Date(firstNextGwMatch.kickoff_time).getTime() <= nowMs);
 
     let computedCurrentGw = nextGw;
     const prevGw = nextGw - 1;
-    if (prevGw >= 1) {
+    if (!nextGwStarted && prevGw >= 1) {
       const { data: lastMatchPrevGw } = await supabase
         .from("fixtures")
         .select("kickoff_time, status")
@@ -196,10 +146,10 @@ export async function GET(req: Request) {
         .maybeSingle();
       if (lastMatchPrevGw) {
         const lastKickoffMs = new Date(lastMatchPrevGw.kickoff_time).getTime();
-        const lastStatus = (lastMatchPrevGw.status ?? "").toLowerCase();
         const lastMatchEndedMs = lastKickoffMs + MATCH_END_OFFSET_MS;
         const cutoffMs = lastMatchEndedMs + HOURS_AFTER_LAST_MATCH_BEFORE_NEXT_GW * 60 * 60 * 1000;
-        if (lastStatus !== "finished" || nowMs < cutoffMs) {
+        const lastMatchDone = isFullTimeStatus(lastMatchPrevGw.status);
+        if (!lastMatchDone || nowMs < cutoffMs) {
           computedCurrentGw = prevGw;
         }
       }
@@ -251,12 +201,9 @@ export async function GET(req: Request) {
     combined.sort((a, b) => a.kickoff_time.localeCompare(b.kickoff_time));
 
     const visible = combined.filter((f) => !shouldHideFromMatchesOverview(f));
-    const visibleWithForm = await Promise.all(
-      visible.map(async (f) => ({ ...f, form: await getFixtureForm(supabase, f) }))
-    );
 
     return NextResponse.json({
-      fixtures: visibleWithForm,
+      fixtures: visible,
       current_gameweek: computedCurrentGw,
       min_gameweek: minGwInDb,
       viewing_gameweek: viewingGw,

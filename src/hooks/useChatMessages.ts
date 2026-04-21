@@ -1,7 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+
+const DEFAULT_CHAT_RETENTION_MS = 60 * 60 * 1000;
+
+function pruneByRetention(messages: ChatMessage[], maxAgeMs: number): ChatMessage[] {
+  const cutoff = Date.now() - maxAgeMs;
+  return messages.filter((m) => {
+    const t = new Date(m.created_at).getTime();
+    return Number.isFinite(t) && t >= cutoff;
+  });
+}
 
 export type ChatScope = "general" | "league";
 
@@ -70,6 +80,7 @@ export function useChatMessages({ scope, leagueId = null, limit = 50 }: UseChatO
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const retentionMsRef = useRef(DEFAULT_CHAT_RETENTION_MS);
   const channelKey = useMemo(() => `${scope}:${leagueId ?? "global"}`, [scope, leagueId]);
 
   const fetchInitial = useCallback(async () => {
@@ -95,7 +106,13 @@ export function useChatMessages({ scope, leagueId = null, limit = 50 }: UseChatO
       setLoading(false);
       return;
     }
-    setMessages(Array.isArray(data.messages) ? data.messages : []);
+    const maxAge =
+      typeof data.retention?.maxAgeMs === "number" && data.retention.maxAgeMs > 0
+        ? data.retention.maxAgeMs
+        : DEFAULT_CHAT_RETENTION_MS;
+    retentionMsRef.current = maxAge;
+    const list = Array.isArray(data.messages) ? (data.messages as ChatMessage[]) : [];
+    setMessages(pruneByRetention(list, maxAge));
     setLoading(false);
   }, [leagueId, limit, scope]);
 
@@ -104,6 +121,14 @@ export function useChatMessages({ scope, leagueId = null, limit = 50 }: UseChatO
       void fetchInitial();
     });
   }, [fetchInitial]);
+
+  /** Drop messages that scroll past the server retention window while the tab stays open. */
+  useEffect(() => {
+    const id = setInterval(() => {
+      setMessages((prev) => pruneByRetention(prev, retentionMsRef.current));
+    }, 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const filter =
@@ -203,7 +228,8 @@ export function useChatMessages({ scope, leagueId = null, limit = 50 }: UseChatO
         const replaced = prev
           .filter((m) => m.id !== tempId)
           .concat(confirmed ? [confirmed] : []);
-        return dedupeById(replaced).sort((a, b) => a.created_at.localeCompare(b.created_at));
+        const next = dedupeById(replaced).sort((a, b) => a.created_at.localeCompare(b.created_at));
+        return pruneByRetention(next, retentionMsRef.current);
       });
       return true;
     },
