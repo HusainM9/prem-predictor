@@ -150,7 +150,24 @@ export default function MatchesPage() {
         setFixtures([]);
       } else {
         setErr(null);
-        setFixtures(Array.isArray(data.fixtures) ? (data.fixtures as Fixture[]) : []);
+        const baseFixtures = Array.isArray(data.fixtures) ? (data.fixtures as Fixture[]) : [];
+        let fixturesWithForm = baseFixtures;
+        if (baseFixtures.length > 0) {
+          const fixtureIds = baseFixtures.map((f) => f.id).join(",");
+          try {
+            const formRes = await fetch(`/api/matches/form?fixtureIds=${encodeURIComponent(fixtureIds)}`);
+            const formData = await formRes.json().catch(() => ({}));
+            if (formRes.ok && formData.forms && typeof formData.forms === "object") {
+              const forms = formData.forms as Record<string, Fixture["form"]>;
+              fixturesWithForm = baseFixtures.map((f) => ({
+                ...f,
+                form: forms[f.id] ?? f.form,
+              }));
+            }
+          } catch {
+          }
+        }
+        setFixtures(fixturesWithForm);
         setCurrentGw(data.current_gameweek ?? null);
         setMinGw(data.min_gameweek ?? 1);
         setGw(data.viewing_gameweek ?? null);
