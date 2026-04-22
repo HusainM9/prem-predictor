@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from "react";
 
 type LogEntry = { time: string; action: string; ok: boolean; text: string };
 
 type FixtureOption = { id: string; home_team: string; away_team: string; status: string; home_goals: number | null; away_goals: number | null; is_stuck?: boolean };
-type ReportStatusFilter = "all" | "open" | "reviewed" | "resolved";
+type ReportStatusFilter = "all" | "open" | "reviewed" | "resolved" | "dismissed";
 type ReportScopeFilter = "all" | "general" | "league";
 type ReportStatusValue = "open" | "reviewed" | "resolved" | "dismissed";
+
+type AdminTab = "tools" | "chat";
 type AdminChatReport = {
   id: string;
   message_id: string;
@@ -466,35 +468,51 @@ function AddLeagueMemberForm({
   );
 }
 
-function ChatModerationReportsForm() {
+function chipStyle(active: boolean): CSSProperties {
+  return {
+    padding: "10px 16px",
+    borderRadius: 999,
+    border: active ? "1px solid rgba(34, 197, 94, 0.55)" : "1px solid rgba(255,255,255,0.2)",
+    background: active ? "rgba(34, 197, 94, 0.18)" : "rgba(255,255,255,0.06)",
+    color: "inherit",
+    cursor: "pointer",
+    fontSize: 14,
+    fontWeight: active ? 600 : 500,
+  };
+}
+
+function ChatModerationWorkspace({ onQueueChanged }: { onQueueChanged?: () => void }) {
   const [statusFilter, setStatusFilter] = useState<ReportStatusFilter>("open");
-  const [scopeFilter, setScopeFilter] = useState<ReportScopeFilter>("all");
+  const [scopeFilter, setScopeFilter] = useState<ReportScopeFilter>("general");
   const [reports, setReports] = useState<AdminChatReport[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
   const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState("");
 
-  const loadReports = useCallback(async (next?: { status?: ReportStatusFilter; scope?: ReportScopeFilter }) => {
-    const status = next?.status ?? statusFilter;
-    const scope = next?.scope ?? scopeFilter;
-    setLoadingReports(true);
-    setErrorText("");
-    try {
-      const params = new URLSearchParams();
-      params.set("status", status);
-      params.set("scope", scope);
-      params.set("limit", "250");
-      const res = await fetch(`/api/admin/chat-reports?${params.toString()}`, { credentials: "include" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setErrorText(typeof data.error === "string" ? data.error : "Failed to load reports.");
-        return;
+  const loadReports = useCallback(
+    async (next?: { status?: ReportStatusFilter; scope?: ReportScopeFilter }) => {
+      const status = next?.status ?? statusFilter;
+      const scope = next?.scope ?? scopeFilter;
+      setLoadingReports(true);
+      setErrorText("");
+      try {
+        const params = new URLSearchParams();
+        params.set("status", status);
+        params.set("scope", scope);
+        params.set("limit", "250");
+        const res = await fetch(`/api/admin/chat-reports?${params.toString()}`, { credentials: "include" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setErrorText(typeof data.error === "string" ? data.error : "Failed to load reports.");
+          return;
+        }
+        setReports(Array.isArray(data.reports) ? (data.reports as AdminChatReport[]) : []);
+      } finally {
+        setLoadingReports(false);
       }
-      setReports(Array.isArray(data.reports) ? (data.reports as AdminChatReport[]) : []);
-    } finally {
-      setLoadingReports(false);
-    }
-  }, [scopeFilter, statusFilter]);
+    },
+    [scopeFilter, statusFilter]
+  );
 
   async function updateStatus(reportId: string, status: ReportStatusValue) {
     setUpdatingReportId(reportId);
@@ -512,6 +530,7 @@ function ChatModerationReportsForm() {
         return;
       }
       await loadReports();
+      onQueueChanged?.();
     } finally {
       setUpdatingReportId(null);
     }
@@ -522,86 +541,169 @@ function ChatModerationReportsForm() {
   }, [loadReports]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
-          Scope
-          <select
-            value={scopeFilter}
-            onChange={(e) => {
-              const next = e.target.value as ReportScopeFilter;
-              setScopeFilter(next);
-              void loadReports({ scope: next });
-            }}
-            style={{ padding: 8, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.06)", color: "inherit" }}
-          >
-            <option value="all">All (global + league)</option>
-            <option value="general">Global chat</option>
-            <option value="league">League chat</option>
-          </select>
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
-          Status
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              const next = e.target.value as ReportStatusFilter;
-              setStatusFilter(next);
-              void loadReports({ status: next });
-            }}
-            style={{ padding: 8, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.06)", color: "inherit" }}
-          >
-            <option value="all">All</option>
-            <option value="open">Open</option>
-            <option value="reviewed">Reviewed</option>
-            <option value="resolved">Resolved</option>
-          </select>
-        </label>
-        <button type="button" onClick={() => void loadReports()} disabled={loadingReports} style={btnStyle}>
-          {loadingReports ? "Loading…" : "Refresh"}
-        </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div
+        style={{
+          borderRadius: 12,
+          border: "1px solid rgba(255,255,255,0.12)",
+          background: "rgba(255,255,255,0.04)",
+          padding: 16,
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+        }}
+      >
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>Chat moderation</h2>
+          <p style={{ margin: 0, fontSize: 14, opacity: 0.78, lineHeight: 1.45 }}>
+            Review reports from <strong>global</strong> and <strong>league</strong> chat. Defaults to{" "}
+            <strong>global chat</strong> and <strong>open</strong> tickets. Use the chips to widen the queue; refresh
+            after you change status.
+          </p>
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, opacity: 0.85, minWidth: 48 }}>Scope</span>
+          {(
+            [
+              { value: "general" as const, label: "Global chat" },
+              { value: "league" as const, label: "League chat" },
+              { value: "all" as const, label: "All" },
+            ] as const
+          ).map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => {
+                setScopeFilter(value);
+                void loadReports({ scope: value });
+              }}
+              style={chipStyle(scopeFilter === value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, opacity: 0.85, minWidth: 48 }}>Status</span>
+          {(
+            [
+              { value: "open" as const, label: "Open" },
+              { value: "all" as const, label: "All" },
+              { value: "reviewed" as const, label: "Reviewed" },
+              { value: "resolved" as const, label: "Resolved" },
+              { value: "dismissed" as const, label: "Dismissed" },
+            ] as const
+          ).map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => {
+                setStatusFilter(value);
+                void loadReports({ status: value });
+              }}
+              style={chipStyle(statusFilter === value)}
+            >
+              {label}
+            </button>
+          ))}
+          <button type="button" onClick={() => void loadReports()} disabled={loadingReports} style={{ ...btnStyle, marginLeft: "auto" }}>
+            {loadingReports ? "Loading…" : "Refresh list"}
+          </button>
+        </div>
+
+        {!loadingReports && statusFilter === "open" && (
+          <p style={{ margin: 0, fontSize: 13, opacity: 0.8 }}>
+            Showing <strong>{reports.length}</strong> open report{reports.length === 1 ? "" : "s"}
+            {scopeFilter === "general" ? " (global chat)" : scopeFilter === "league" ? " (league chat)" : " (all scopes)"}.
+          </p>
+        )}
       </div>
 
-      {errorText && <p style={{ margin: 0, color: "crimson", fontSize: 13 }}>{errorText}</p>}
+      {errorText && <p style={{ margin: 0, color: "crimson", fontSize: 14 }}>{errorText}</p>}
 
       {!loadingReports && reports.length === 0 && (
-        <p style={{ margin: 0, fontSize: 13, opacity: 0.75 }}>No reports match your filters.</p>
+        <p style={{ margin: 0, fontSize: 15, opacity: 0.8 }}>No reports match these filters.</p>
       )}
 
-      {reports.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 520, overflowY: "auto", paddingRight: 4 }}>
+      {loadingReports && <p style={{ margin: 0, fontSize: 14, opacity: 0.75 }}>Loading reports…</p>}
+
+      {reports.length > 0 && !loadingReports && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+            maxHeight: "min(70vh, 720px)",
+            overflowY: "auto",
+            paddingRight: 6,
+          }}
+        >
           {reports.map((report) => (
             <article
               key={report.id}
-              style={{ border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, padding: 10, background: "rgba(255,255,255,0.04)" }}
+              style={{
+                border: "1px solid rgba(255,255,255,0.18)",
+                borderRadius: 12,
+                padding: 16,
+                background: "rgba(0,0,0,0.18)",
+              }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-                <div style={{ fontSize: 12, opacity: 0.8 }}>
-                  {new Date(report.created_at).toLocaleString()} • {report.scope === "general" ? "Global chat" : "League chat"}
-                  {report.scope === "league" && (
-                    <>
-                      {" "}
-                      • {report.league_name ?? report.league_id ?? "Unknown league"}
-                    </>
-                  )}
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
+                <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.4 }}>
+                  <strong>{new Date(report.created_at).toLocaleString()}</strong>
+                  <br />
+                  <span style={{ opacity: 0.9 }}>
+                    {report.scope === "general" ? "Global chat" : "League chat"}
+                    {report.scope === "league" && (
+                      <>
+                        {" "}
+                        · {report.league_name ?? report.league_id ?? "Unknown league"}
+                      </>
+                    )}
+                  </span>
                 </div>
-                <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", opacity: 0.9 }}>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                    padding: "4px 10px",
+                    borderRadius: 8,
+                    background: "rgba(255,255,255,0.08)",
+                    alignSelf: "flex-start",
+                  }}
+                >
                   {report.status}
-                </div>
+                </span>
               </div>
-              <p style={{ margin: "0 0 4px", fontSize: 13 }}>
+              <p style={{ margin: "0 0 10px", fontSize: 14 }}>
                 <strong>{report.message_snapshot?.reporter_display_name ?? "Reporter"}</strong> reported{" "}
                 <strong>{report.message_snapshot?.sender_display_name ?? "User"}</strong>
               </p>
-              <p style={{ margin: "0 0 6px", fontSize: 13, opacity: 0.85 }}>
+              <div
+                style={{
+                  margin: "0 0 12px",
+                  padding: "12px 14px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  background: "rgba(255,255,255,0.05)",
+                  fontSize: 14,
+                  lineHeight: 1.5,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
                 {report.message_snapshot?.message_text || "[no text snapshot]"}
-              </p>
+              </div>
               {report.reason && (
-                <p style={{ margin: "0 0 8px", fontSize: 12, opacity: 0.8 }}>
-                  Reason: {report.reason}
+                <p style={{ margin: "0 0 12px", fontSize: 13, opacity: 0.88 }}>
+                  <strong>Reason:</strong> {report.reason}
                 </p>
               )}
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                 <button
                   type="button"
                   disabled={updatingReportId === report.id || report.status === "reviewed"}
@@ -617,6 +719,14 @@ function ChatModerationReportsForm() {
                   style={btnStyle}
                 >
                   Mark resolved
+                </button>
+                <button
+                  type="button"
+                  disabled={updatingReportId === report.id || report.status === "dismissed"}
+                  onClick={() => void updateStatus(report.id, "dismissed")}
+                  style={{ ...btnStyle, background: "rgba(255,255,255,0.06)" }}
+                >
+                  Dismiss
                 </button>
                 <button
                   type="button"
@@ -649,12 +759,34 @@ export default function AdminPage() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [secret, setSecret] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [adminTab, setAdminTab] = useState<AdminTab>("tools");
+  const [openChatReportsCount, setOpenChatReportsCount] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/verify", fetchOpts("GET"))
       .then((r) => setAuthed(r.ok))
       .catch(() => setAuthed(false));
   }, []);
+
+  const refreshOpenChatReportsHint = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/chat-reports?status=open&scope=all&limit=250", {
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !Array.isArray(data.reports)) {
+        setOpenChatReportsCount(null);
+        return;
+      }
+      setOpenChatReportsCount(data.reports.length);
+    } catch {
+      setOpenChatReportsCount(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (authed === true) void refreshOpenChatReportsHint();
+  }, [authed, refreshOpenChatReportsHint]);
 
   function addLog(action: string, ok: boolean, text: string) {
     setLog((prev) => [
@@ -683,7 +815,7 @@ export default function AdminPage() {
     }
   }
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: FormEvent) {
     e.preventDefault();
     setLoginError("");
     const res = await fetch("/api/admin/login", fetchOpts("POST", { secret }));
@@ -730,13 +862,34 @@ export default function AdminPage() {
     setAuthed(false);
   }
 
+  const tabBtn = (active: boolean): CSSProperties => ({
+    padding: "12px 20px",
+    borderRadius: 10,
+    border: active ? "1px solid rgba(34, 197, 94, 0.5)" : "1px solid rgba(255,255,255,0.2)",
+    background: active ? "rgba(34, 197, 94, 0.15)" : "rgba(255,255,255,0.06)",
+    color: "inherit",
+    cursor: "pointer",
+    fontSize: 15,
+    fontWeight: active ? 700 : 500,
+    flex: "1 1 200px",
+    textAlign: "center" as const,
+  });
+
   return (
-    <main style={{ padding: 24, maxWidth: 720, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
+    <main
+      style={{
+        padding: 24,
+        maxWidth: adminTab === "chat" ? 980 : 720,
+        margin: "0 auto",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
         <div>
           <h1 style={{ fontSize: 24, marginBottom: 4 }}>Admin</h1>
           <p style={{ opacity: 0.75, fontSize: 14 }}>
-            Run jobs manually. Sessions expire after 1 hour.
+            {adminTab === "chat"
+              ? "Chat moderation — review reported messages."
+              : "Run jobs manually. Sessions expire after 1 hour."}
           </p>
         </div>
         <button
@@ -748,6 +901,43 @@ export default function AdminPage() {
         </button>
       </div>
 
+      <div
+        role="tablist"
+        aria-label="Admin sections"
+        style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={adminTab === "tools"}
+          onClick={() => setAdminTab("tools")}
+          style={tabBtn(adminTab === "tools")}
+        >
+          Tools & jobs
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={adminTab === "chat"}
+          onClick={() => {
+            setAdminTab("chat");
+            void refreshOpenChatReportsHint();
+          }}
+          style={tabBtn(adminTab === "chat")}
+        >
+          Chat moderation
+          {openChatReportsCount != null && openChatReportsCount > 0 ? (
+            <span style={{ marginLeft: 8, fontSize: 13, opacity: 0.95 }}>({openChatReportsCount} open)</span>
+          ) : null}
+        </button>
+      </div>
+
+      {adminTab === "chat" ? (
+        <ChatModerationWorkspace onQueueChanged={refreshOpenChatReportsHint} />
+      ) : null}
+
+      {adminTab === "tools" ? (
+        <>
       <section style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 10 }}>Set / update result</h2>
         <SetResultForm run={run} loading={loading} />
@@ -860,14 +1050,6 @@ export default function AdminPage() {
       </section>
 
       <section style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 10 }}>Chat moderation</h2>
-        <p style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
-          Aggregated moderation queue for global and league chat reports. Filter by scope and status.
-        </p>
-        <ChatModerationReportsForm />
-      </section>
-
-      <section style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 10 }}>Odds</h2>
         <p style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
           <strong>Unlock</strong> clears <code style={{ fontSize: 11 }}>odds_locked_at</code> and the locked line on fixtures, and{" "}
@@ -973,11 +1155,13 @@ export default function AdminPage() {
           )}
         </div>
       </section>
+        </>
+      ) : null}
     </main>
   );
 }
 
-const btnStyle: React.CSSProperties = {
+const btnStyle: CSSProperties = {
   padding: "8px 14px",
   borderRadius: 8,
   border: "1px solid rgba(255,255,255,0.2)",
