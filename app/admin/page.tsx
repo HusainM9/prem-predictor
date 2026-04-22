@@ -1,10 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type LogEntry = { time: string; action: string; ok: boolean; text: string };
 
 type FixtureOption = { id: string; home_team: string; away_team: string; status: string; home_goals: number | null; away_goals: number | null; is_stuck?: boolean };
+type ReportStatusFilter = "all" | "open" | "reviewed" | "resolved";
+type ReportScopeFilter = "all" | "general" | "league";
+type ReportStatusValue = "open" | "reviewed" | "resolved" | "dismissed";
+type AdminChatReport = {
+  id: string;
+  message_id: string;
+  reporter_user_id: string;
+  reported_user_id: string;
+  league_id: string | null;
+  league_name: string | null;
+  scope: "general" | "league";
+  reason: string | null;
+  status: ReportStatusValue;
+  created_at: string;
+  message_snapshot: {
+    message_text: string | null;
+    sender_display_name: string | null;
+    reporter_display_name: string | null;
+  } | null;
+};
 
 function SetResultForm({
   run,
@@ -446,6 +466,175 @@ function AddLeagueMemberForm({
   );
 }
 
+function ChatModerationReportsForm() {
+  const [statusFilter, setStatusFilter] = useState<ReportStatusFilter>("open");
+  const [scopeFilter, setScopeFilter] = useState<ReportScopeFilter>("all");
+  const [reports, setReports] = useState<AdminChatReport[]>([]);
+  const [loadingReports, setLoadingReports] = useState(false);
+  const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
+  const [errorText, setErrorText] = useState("");
+
+  const loadReports = useCallback(async (next?: { status?: ReportStatusFilter; scope?: ReportScopeFilter }) => {
+    const status = next?.status ?? statusFilter;
+    const scope = next?.scope ?? scopeFilter;
+    setLoadingReports(true);
+    setErrorText("");
+    try {
+      const params = new URLSearchParams();
+      params.set("status", status);
+      params.set("scope", scope);
+      params.set("limit", "250");
+      const res = await fetch(`/api/admin/chat-reports?${params.toString()}`, { credentials: "include" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorText(typeof data.error === "string" ? data.error : "Failed to load reports.");
+        return;
+      }
+      setReports(Array.isArray(data.reports) ? (data.reports as AdminChatReport[]) : []);
+    } finally {
+      setLoadingReports(false);
+    }
+  }, [scopeFilter, statusFilter]);
+
+  async function updateStatus(reportId: string, status: ReportStatusValue) {
+    setUpdatingReportId(reportId);
+    setErrorText("");
+    try {
+      const res = await fetch("/api/admin/chat-reports", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportId, status }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorText(typeof data.error === "string" ? data.error : "Failed to update report status.");
+        return;
+      }
+      await loadReports();
+    } finally {
+      setUpdatingReportId(null);
+    }
+  }
+
+  useEffect(() => {
+    void loadReports();
+  }, [loadReports]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
+          Scope
+          <select
+            value={scopeFilter}
+            onChange={(e) => {
+              const next = e.target.value as ReportScopeFilter;
+              setScopeFilter(next);
+              void loadReports({ scope: next });
+            }}
+            style={{ padding: 8, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.06)", color: "inherit" }}
+          >
+            <option value="all">All (global + league)</option>
+            <option value="general">Global chat</option>
+            <option value="league">League chat</option>
+          </select>
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
+          Status
+          <select
+            value={statusFilter}
+            onChange={(e) => {
+              const next = e.target.value as ReportStatusFilter;
+              setStatusFilter(next);
+              void loadReports({ status: next });
+            }}
+            style={{ padding: 8, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.06)", color: "inherit" }}
+          >
+            <option value="all">All</option>
+            <option value="open">Open</option>
+            <option value="reviewed">Reviewed</option>
+            <option value="resolved">Resolved</option>
+          </select>
+        </label>
+        <button type="button" onClick={() => void loadReports()} disabled={loadingReports} style={btnStyle}>
+          {loadingReports ? "Loading…" : "Refresh"}
+        </button>
+      </div>
+
+      {errorText && <p style={{ margin: 0, color: "crimson", fontSize: 13 }}>{errorText}</p>}
+
+      {!loadingReports && reports.length === 0 && (
+        <p style={{ margin: 0, fontSize: 13, opacity: 0.75 }}>No reports match your filters.</p>
+      )}
+
+      {reports.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 520, overflowY: "auto", paddingRight: 4 }}>
+          {reports.map((report) => (
+            <article
+              key={report.id}
+              style={{ border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, padding: 10, background: "rgba(255,255,255,0.04)" }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>
+                  {new Date(report.created_at).toLocaleString()} • {report.scope === "general" ? "Global chat" : "League chat"}
+                  {report.scope === "league" && (
+                    <>
+                      {" "}
+                      • {report.league_name ?? report.league_id ?? "Unknown league"}
+                    </>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", opacity: 0.9 }}>
+                  {report.status}
+                </div>
+              </div>
+              <p style={{ margin: "0 0 4px", fontSize: 13 }}>
+                <strong>{report.message_snapshot?.reporter_display_name ?? "Reporter"}</strong> reported{" "}
+                <strong>{report.message_snapshot?.sender_display_name ?? "User"}</strong>
+              </p>
+              <p style={{ margin: "0 0 6px", fontSize: 13, opacity: 0.85 }}>
+                {report.message_snapshot?.message_text || "[no text snapshot]"}
+              </p>
+              {report.reason && (
+                <p style={{ margin: "0 0 8px", fontSize: 12, opacity: 0.8 }}>
+                  Reason: {report.reason}
+                </p>
+              )}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  disabled={updatingReportId === report.id || report.status === "reviewed"}
+                  onClick={() => void updateStatus(report.id, "reviewed")}
+                  style={btnStyle}
+                >
+                  Mark reviewed
+                </button>
+                <button
+                  type="button"
+                  disabled={updatingReportId === report.id || report.status === "resolved"}
+                  onClick={() => void updateStatus(report.id, "resolved")}
+                  style={btnStyle}
+                >
+                  Mark resolved
+                </button>
+                <button
+                  type="button"
+                  disabled={updatingReportId === report.id || report.status === "open"}
+                  onClick={() => void updateStatus(report.id, "open")}
+                  style={{ ...btnStyle, background: "rgba(255,255,255,0.04)" }}
+                >
+                  Re-open
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const fetchOpts = (method: "GET" | "POST", body?: object) => ({
   method,
   credentials: "include" as const,
@@ -668,6 +857,14 @@ export default function AdminPage() {
           Add an existing user (by email) to a league. League ID is in the URL when you open a league .
         </p>
         <AddLeagueMemberForm run={run} loading={loading} />
+      </section>
+
+      <section style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 10 }}>Chat moderation</h2>
+        <p style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
+          Aggregated moderation queue for global and league chat reports. Filter by scope and status.
+        </p>
+        <ChatModerationReportsForm />
       </section>
 
       <section style={{ marginBottom: 24 }}>

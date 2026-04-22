@@ -5,6 +5,11 @@ import { validateChatText } from "@/lib/chat/moderation";
 import { getChatMessageRetentionMs, getChatMessagesNotBeforeIso } from "@/lib/chat/retention";
 
 type Scope = "general" | "league";
+type ReplyMetadata = {
+  reply_to_message_id: string;
+  reply_to_sender_display_name: string;
+  reply_to_text: string;
+};
 
 function parseScope(value: string | null): Scope {
   return value === "league" ? "league" : "general";
@@ -232,6 +237,10 @@ export async function POST(req: Request) {
       typeof body.predictionId === "string" && body.predictionId.trim().length > 0
         ? body.predictionId.trim()
         : null;
+    const replyToMessageId =
+      typeof body.replyTo?.messageId === "string" && body.replyTo.messageId.trim().length > 0
+        ? body.replyTo.messageId.trim()
+        : null;
 
     if (scope === "league") {
       if (!leagueId) return NextResponse.json({ error: "Missing leagueId" }, { status: 400 });
@@ -255,6 +264,7 @@ export async function POST(req: Request) {
     }
 
     let predictionPayload: ReturnType<typeof buildPredictionSharePayload> | null = null;
+    let replyMetadata: ReplyMetadata | null = null;
     if (messageType === "prediction_share") {
       if (!predictionId) {
         return NextResponse.json({ error: "Missing predictionId" }, { status: 400 });
@@ -265,13 +275,44 @@ export async function POST(req: Request) {
       }
       predictionPayload = buildPredictionSharePayload(prediction);
     }
+    if (messageType === "text" && replyToMessageId) {
+      const { data: replyMessage } = await supabase
+        .from("messages")
+        .select("id,user_id,league_id,text")
+        .eq("id", replyToMessageId)
+        .maybeSingle();
+      if (!replyMessage) {
+        return NextResponse.json({ error: "Reply target not found" }, { status: 404 });
+      }
+      const inSameScope =
+        scope === "general"
+          ? replyMessage.league_id == null
+          : replyMessage.league_id === leagueId;
+      if (!inSameScope) {
+        return NextResponse.json({ error: "Reply target is not in this chat scope" }, { status: 400 });
+      }
+      const { data: replyAuthorProfile } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", replyMessage.user_id as string)
+        .maybeSingle();
+      const replyText = typeof replyMessage.text === "string" ? replyMessage.text.trim() : "";
+      replyMetadata = {
+        reply_to_message_id: replyToMessageId,
+        reply_to_sender_display_name:
+          typeof replyAuthorProfile?.display_name === "string" && replyAuthorProfile.display_name.trim().length > 0
+            ? replyAuthorProfile.display_name.trim()
+            : "Player",
+        reply_to_text: (replyText || "[no text]").slice(0, 160),
+      };
+    }
 
     const insertPayload = {
       user_id: viewer.id,
       league_id: scope === "league" ? leagueId : null,
       message_type: messageType,
       text: messageType === "text" ? textValidation.value : textValidation.value || null,
-      prediction_payload: predictionPayload,
+      prediction_payload: messageType === "prediction_share" ? predictionPayload : replyMetadata,
     };
 
     const { data, error } = await supabase

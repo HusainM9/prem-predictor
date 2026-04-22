@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/score-bonuses",
       "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-chat-messages",
+      "schedule": "*/20 * * * *"
     }
   ]
 }

@@ -29,6 +29,12 @@ export type ChatMessage = {
   failed?: boolean;
 };
 
+export type ChatReplyMeta = {
+  reply_to_message_id: string;
+  reply_to_sender_display_name: string;
+  reply_to_text: string;
+};
+
 export type ShareablePrediction = {
   prediction_id: string;
   fixture_id: string;
@@ -165,11 +171,13 @@ export function useChatMessages({ scope, leagueId = null, limit = 50 }: UseChatO
       messageType,
       predictionId,
       optimisticPrediction,
+      replyTo,
     }: {
       text?: string;
       messageType: "text" | "prediction_share";
       predictionId?: string;
       optimisticPrediction?: ShareablePrediction | null;
+      replyTo?: { messageId: string } | null;
     }) => {
       const trimmed = (text ?? "").trim();
       if (messageType === "text" && !trimmed) return false;
@@ -212,6 +220,12 @@ export function useChatMessages({ scope, leagueId = null, limit = 50 }: UseChatO
           messageType,
           text: trimmed,
           predictionId: messageType === "prediction_share" ? predictionId ?? null : null,
+          replyTo:
+            messageType === "text" && replyTo?.messageId
+              ? {
+                  messageId: replyTo.messageId,
+                }
+              : null,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -237,7 +251,15 @@ export function useChatMessages({ scope, leagueId = null, limit = 50 }: UseChatO
   );
 
   const sendTextMessage = useCallback(
-    async (text: string) => sendMessage({ text, messageType: "text" }),
+    async (text: string, options?: { replyToMessageId?: string | null }) =>
+      sendMessage({
+        text,
+        messageType: "text",
+        replyTo:
+          options?.replyToMessageId && options.replyToMessageId.trim().length > 0
+            ? { messageId: options.replyToMessageId.trim() }
+            : null,
+      }),
     [sendMessage]
   );
 
