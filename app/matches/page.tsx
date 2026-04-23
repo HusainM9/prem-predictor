@@ -120,6 +120,7 @@ export default function MatchesPage() {
   const [gw, setGw] = useState<number | null>(null);
   const [currentGw, setCurrentGw] = useState<number | null>(null);
   const [minGw, setMinGw] = useState<number>(1);
+  const [maxGw, setMaxGw] = useState<number | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [canReact, setCanReact] = useState(false);
@@ -170,6 +171,7 @@ export default function MatchesPage() {
         setFixtures(fixturesWithForm);
         setCurrentGw(data.current_gameweek ?? null);
         setMinGw(data.min_gameweek ?? 1);
+        setMaxGw(data.max_gameweek ?? null);
         setGw(data.viewing_gameweek ?? null);
         setLastUpdated(data.updated_at ? new Date(data.updated_at) : new Date());
       }
@@ -201,7 +203,7 @@ export default function MatchesPage() {
   );
 
   const canGoPrev = gw != null && minGw != null && gw > minGw;
-  const canGoNext = gw != null && currentGw != null && gw < currentGw;
+  const canGoNext = gw != null && maxGw != null && gw < maxGw;
 
   const byDate = useMemo(() => {
     const map = new Map<string, Fixture[]>();
@@ -275,8 +277,10 @@ export default function MatchesPage() {
           </div>
           <p className="text-xs text-muted-foreground max-sm:text-xs sm:text-sm">
             Gameweek {gw ?? "…"}
-            {gw !== null && currentGw !== null && gw < currentGw && (
-              <span className="ml-1.5 sm:ml-2 text-[10px] sm:text-xs">(viewing past · current is GW {currentGw})</span>
+            {gw !== null && currentGw !== null && gw !== currentGw && (
+              <span className="ml-1.5 sm:ml-2 text-[10px] sm:text-xs">
+                ({gw < currentGw ? `viewing past` : `viewing future`} · current is GW {currentGw})
+              </span>
             )}
             {lastUpdated && (
               <span className="ml-1.5 sm:ml-2">

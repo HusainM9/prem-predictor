@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { Zap, User, LogOut } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
+import { DesignPresetSwitcher } from "@/components/design/DesignPresetSwitcher"
 
 /**private: true = only when logged in. */
 const navLinks = [
@@ -102,6 +103,7 @@ export function Navbar() {
         </div>
 
         <div className="flex w-full shrink-0 items-center justify-end gap-1 max-[420px]:w-full sm:w-auto sm:gap-2">
+          <DesignPresetSwitcher />
           {userEmail ? (
             <>
               <Link

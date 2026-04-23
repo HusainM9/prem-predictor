@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const SEASON = "2025/26";
-const HOURS_AFTER_LAST_MATCH_BEFORE_NEXT_GW = 24;
-const MATCH_END_OFFSET_MS = 2 * 60 * 60 * 1000;
 
 /** Statuses for matches that are live (not on the pre-kick "scheduled" row). */
 const IN_PLAY_STATUSES: string[] = [
@@ -27,12 +25,6 @@ type Fixture = {
   away_goals: number | null;
   is_stuck?: boolean;
 };
-
-/** DB rows may use `finished` (sync) or `ft` (legacy / imports) — both mean full time. */
-function isFullTimeStatus(status: string | null | undefined): boolean {
-  const s = (status ?? "").toLowerCase();
-  return s === "finished" || s === "ft";
-}
 
 function shouldHideFromMatchesOverview(f: { kickoff_time: string; status: string }): boolean {
   const s = (f.status ?? "").toLowerCase();
@@ -109,14 +101,9 @@ export async function GET(req: Request) {
     const liveMaxGw = inPlayRes.data?.gameweek ?? null;
     const lastGwInDb = lastRowRes.data?.gameweek ?? 1;
 
-    let nextGw: number;
-    if (liveMaxGw != null && scheduledNextGw != null && scheduledNextGw > liveMaxGw) {
-      nextGw = liveMaxGw;
-    } else if (liveMaxGw != null && scheduledNextGw != null) {
-      nextGw = Math.max(scheduledNextGw, liveMaxGw);
-    } else {
-      nextGw = liveMaxGw ?? scheduledNextGw ?? lastGwInDb;
-    }
+    // Align with Play page: prefer the next upcoming scheduled gameweek.
+    // Fall back to in-play, then latest gameweek in DB.
+    let nextGw: number = scheduledNextGw ?? liveMaxGw ?? lastGwInDb;
     if (nextGw < 1) nextGw = 1;
 
     const hasLiveInNextGw = liveMaxGw != null && liveMaxGw === nextGw;
@@ -133,32 +120,15 @@ export async function GET(req: Request) {
       (firstNextGwMatch?.kickoff_time != null &&
         new Date(firstNextGwMatch.kickoff_time).getTime() <= nowMs);
 
+    // Keep matches aligned with Play page behavior: once a next gameweek exists,
+    // treat it as current rather than holding the previous gameweek for a grace period.
     let computedCurrentGw = nextGw;
-    const prevGw = nextGw - 1;
-    if (!nextGwStarted && prevGw >= 1) {
-      const { data: lastMatchPrevGw } = await supabase
-        .from("fixtures")
-        .select("kickoff_time, status")
-        .eq("season", SEASON)
-        .eq("gameweek", prevGw)
-        .order("kickoff_time", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (lastMatchPrevGw) {
-        const lastKickoffMs = new Date(lastMatchPrevGw.kickoff_time).getTime();
-        const lastMatchEndedMs = lastKickoffMs + MATCH_END_OFFSET_MS;
-        const cutoffMs = lastMatchEndedMs + HOURS_AFTER_LAST_MATCH_BEFORE_NEXT_GW * 60 * 60 * 1000;
-        const lastMatchDone = isFullTimeStatus(lastMatchPrevGw.status);
-        if (!lastMatchDone || nowMs < cutoffMs) {
-          computedCurrentGw = prevGw;
-        }
-      }
-    }
 
     const minGwInDb = minRowRes.data?.gameweek ?? 1;
+    const maxGwInDb = Math.max(1, lastGwInDb);
     const viewingGw =
       targetGw != null
-        ? Math.min(computedCurrentGw, Math.max(minGwInDb, targetGw))
+        ? Math.min(maxGwInDb, Math.max(minGwInDb, targetGw))
         : computedCurrentGw;
 
     const { data: gwFx, error: gwErr } = await supabase
@@ -176,7 +146,9 @@ export async function GET(req: Request) {
     const firstKickoff = gwList.length > 0 ? gwList[0].kickoff_time : null;
 
     let extraList: Fixture[] = [];
-    if (firstKickoff) {
+    // Only carry unresolved earlier fixtures into the "current" gameweek view.
+    // For explicit past/future navigation, show fixtures for that gameweek only.
+    if (firstKickoff && viewingGw === computedCurrentGw) {
       const { data: extraFx } = await supabase
         .from("fixtures")
         .select("id,kickoff_time,home_team,away_team,status,gameweek,home_goals,away_goals,is_stuck")
@@ -206,6 +178,7 @@ export async function GET(req: Request) {
       fixtures: visible,
       current_gameweek: computedCurrentGw,
       min_gameweek: minGwInDb,
+      max_gameweek: maxGwInDb,
       viewing_gameweek: viewingGw,
       updated_at: new Date().toISOString(),
     });

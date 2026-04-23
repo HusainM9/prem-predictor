@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+@import './design-presets.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -46,44 +47,7 @@
 }
 
 .dark {
-  /* Dark sports theme. pitch-black bg with emerald green accent */
-  --background: oklch(0.1 0.005 260);
-  --foreground: oklch(0.95 0 0);
-  --card: oklch(0.155 0.005 260);
-  --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.155 0.005 260);
-  --popover-foreground: oklch(0.95 0 0);
-  --primary: oklch(0.72 0.19 160);
-  --primary-foreground: oklch(0.1 0.005 260);
-  --secondary: oklch(0.2 0.005 260);
-  --secondary-foreground: oklch(0.92 0 0);
-  --muted: oklch(0.2 0.005 260);
-  --muted-foreground: oklch(0.6 0 0);
-  --accent: oklch(0.72 0.19 160);
-  --accent-foreground: oklch(0.1 0.005 260);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.24 0.005 260);
-  --input: oklch(0.24 0.005 260);
-  --ring: oklch(0.72 0.19 160);
-  --chart-1: oklch(0.72 0.19 160);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.12 0.005 260);
-  --sidebar-foreground: oklch(0.95 0 0);
-  --sidebar-primary: oklch(0.72 0.19 160);
-  --sidebar-primary-foreground: oklch(0.1 0.005 260);
-  --sidebar-accent: oklch(0.2 0.005 260);
-  --sidebar-accent-foreground: oklch(0.95 0 0);
-  --sidebar-border: oklch(0.24 0.005 260);
-  --sidebar-ring: oklch(0.72 0.19 160);
-  --surface: oklch(0.13 0.005 260);
-  --surface-foreground: oklch(0.92 0 0);
-  --positive: oklch(0.72 0.19 160);
-  --negative: oklch(0.65 0.2 25);
-  --warning: oklch(0.8 0.18 85);
+  color-scheme: dark;
 }
 
 @theme inline {

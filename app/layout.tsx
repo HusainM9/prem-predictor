@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { ThemeProvider } from "@/components/them-prov";
+import { DesignPresetProvider } from "@/components/design/DesignPresetProvider";
 import { RecoveryRedirect } from "@/components/auth/RecoveryRedirect";
 import { FavouriteTeamPrompt } from "@/components/auth/FavouriteTeamPrompt";
 import { GlobalChatLauncher } from "@/components/chat/GlobalChatLauncher";
@@ -34,11 +35,13 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased bg-background text-foreground min-h-screen overflow-x-hidden`}
       >
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-          <RecoveryRedirect />
-          <FavouriteTeamPrompt />
-          <Navbar />
-          {children}
-          <GlobalChatLauncher />
+          <DesignPresetProvider>
+            <RecoveryRedirect />
+            <FavouriteTeamPrompt />
+            <Navbar />
+            {children}
+            <GlobalChatLauncher />
+          </DesignPresetProvider>
         </ThemeProvider>
       </body>
     </html>
