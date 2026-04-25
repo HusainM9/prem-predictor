@@ -44,21 +44,9 @@ export async function GET(req: Request) {
     );
     const search = (searchParams.get("search") ?? "").trim();
 
-    // Use only global predictions one prediction applies to global and all leagues
-    const query = supabase
-      .from("predictions")
-      .select("user_id, points_awarded, bonus_exact_score_points, fixture_id")
-      .not("settled_at", "is", null)
-      .is("league_id", null);
-
-    const { data: rows, error } = await query;
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    let filtered = (rows ?? []) as PredictionRow[];
-
     let league_name: string | null = null;
+    let memberUserIds: string[] | null = null;
+
     if (leagueId != null && leagueId !== "") {
       const { data: league } = await supabase
         .from("leagues")
@@ -70,9 +58,34 @@ export async function GET(req: Request) {
         .from("league_members")
         .select("user_id")
         .eq("league_id", leagueId);
-      const memberIds = new Set((members ?? []).map((m) => m.user_id));
-      filtered = filtered.filter((r) => memberIds.has(r.user_id));
+      memberUserIds = (members ?? []).map((m) => m.user_id as string);
+      if (memberUserIds.length === 0) {
+        return NextResponse.json({
+          entries: [],
+          total_count: 0,
+          leagueId,
+          league_name: league_name ?? null,
+          gameweek: gameweek ?? null,
+        });
+      }
     }
+
+    // Global predictions only; scope by league members when leagueId is set (avoids loading every user).
+    let predQuery = supabase
+      .from("predictions")
+      .select("user_id, points_awarded, bonus_exact_score_points, fixture_id")
+      .not("settled_at", "is", null)
+      .is("league_id", null);
+    if (memberUserIds != null && memberUserIds.length > 0) {
+      predQuery = predQuery.in("user_id", memberUserIds);
+    }
+
+    const { data: rows, error } = await predQuery;
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    let filtered = (rows ?? []) as PredictionRow[];
 
     if (gameweek != null && filtered.length > 0) {
       const fixtureIds = [...new Set(filtered.map((r) => r.fixture_id))];

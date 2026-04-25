@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import { LeaderboardTable, type LeaderboardEntry } from "@/components/leaderboard/LeaderboardTable";
@@ -17,6 +17,7 @@ function getLeagueInitials(name: string): string {
 
 export default function LeagueDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const leagueId = typeof params.leagueId === "string" ? params.leagueId : null;
 
   const [leagueName, setLeagueName] = useState<string | null>(null);
@@ -32,34 +33,9 @@ export default function LeagueDetailPage() {
   const [loading, setLoading] = useState(true);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  /** Non-fatal: summary loaded but leaderboard request failed */
+  const [leaderboardErr, setLeaderboardErr] = useState<string | null>(null);
   const [copyDone, setCopyDone] = useState(false);
-
-  const fetchLeaderboard = useCallback(() => {
-    if (!leagueId) return () => {};
-    let cancelled = false;
-    setLoadingLeaderboard(true);
-    const params = new URLSearchParams();
-    params.set("leagueId", leagueId);
-    params.set("limit", String(PAGE_SIZE));
-    params.set("offset", "0");
-    fetch(`/api/leaderboard?${params.toString()}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (cancelled) return;
-        if (d.error) setErr(d.error);
-        else {
-          setEntries(d.entries ?? []);
-          setTotalCount(d.total_count ?? 0);
-        }
-      })
-      .catch((e) => {
-        if (!cancelled) setErr(e.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingLeaderboard(false);
-      });
-    return () => { cancelled = true; };
-  }, [leagueId]);
 
   useEffect(() => {
     if (!leagueId) {
@@ -73,7 +49,9 @@ export default function LeagueDetailPage() {
     let cancelled = false;
     queueMicrotask(() => {
       setLoading(true);
+      setLoadingLeaderboard(true);
       setErr(null);
+      setLeaderboardErr(null);
     });
 
     supabase.auth.getUser().then(({ data }) => {
@@ -81,51 +59,94 @@ export default function LeagueDetailPage() {
     });
 
     (async () => {
-      const { data: league, error: leagueErr } = await supabase
-        .from("leagues")
-        .select("id, name, invite_code")
-        .eq("id", leagueId)
-        .maybeSingle();
-
+      const { data: { session } } = await supabase.auth.getSession();
       if (cancelled) return;
-      if (leagueErr || !league) {
-        setErr(leagueErr?.message ?? "League not found");
+      if (!session?.access_token) {
+        router.replace("/");
         setLoading(false);
+        setLoadingLeaderboard(false);
         return;
       }
 
-      setLeagueName(league.name);
-      setInviteCode(league.invite_code ?? null);
+      const authHeaders = { Authorization: `Bearer ${session.access_token}` };
+      const lbParams = new URLSearchParams();
+      lbParams.set("leagueId", leagueId);
+      lbParams.set("limit", String(PAGE_SIZE));
+      lbParams.set("offset", "0");
 
-      // Use leagues summary API for member_count, my_rank, my_points, gap_to_first, rank_change 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!cancelled && session?.access_token) {
-        const res = await fetch("/api/leagues", {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        const data = await res.json();
-        if (res.ok && data.leagues) {
-          const summary = data.leagues.find((l: { id: string }) => l.id === leagueId);
-          if (summary) {
-            setMemberCount(summary.member_count ?? 0);
-            setMyRank(summary.my_rank ?? null);
-            setMyPoints(summary.my_points ?? null);
-            setGapToFirst(summary.gap_to_first ?? null);
-            setRankChange(summary.rank_change ?? null);
-          }
+      let summaryRes: Response;
+      let lbRes: Response;
+      try {
+        [summaryRes, lbRes] = await Promise.all([
+          fetch(`/api/leagues?leagueId=${encodeURIComponent(leagueId)}`, { headers: authHeaders }),
+          fetch(`/api/leaderboard?${lbParams.toString()}`),
+        ]);
+      } catch (e) {
+        if (!cancelled) {
+          setErr(e instanceof Error ? e.message : "Network error");
+          setLoading(false);
+          setLoadingLeaderboard(false);
         }
+        return;
       }
 
-      if (!cancelled) setLoading(false);
+      const [summaryData, lbData] = await Promise.all([summaryRes.json(), lbRes.json()]);
+      if (cancelled) return;
+
+      if (!summaryRes.ok) {
+        setErr(summaryData.error ?? "Failed to load league");
+        setLeagueName(null);
+        setLoading(false);
+        setLoadingLeaderboard(false);
+        return;
+      }
+
+      const summary = summaryData.leagues?.[0] as
+        | {
+            id: string;
+            name: string;
+            invite_code: string | null;
+            member_count: number;
+            my_rank: number | null;
+            my_points: number | null;
+            gap_to_first: number | null;
+            rank_change: number | null;
+          }
+        | undefined;
+
+      if (!summary) {
+        setErr("League not found");
+        setLeagueName(null);
+        setLoading(false);
+        setLoadingLeaderboard(false);
+        return;
+      }
+
+      setLeagueName(summary.name);
+      setInviteCode(summary.invite_code ?? null);
+      setMemberCount(summary.member_count ?? 0);
+      setMyRank(summary.my_rank ?? null);
+      setMyPoints(summary.my_points ?? null);
+      setGapToFirst(summary.gap_to_first ?? null);
+      setRankChange(summary.rank_change ?? null);
+      setLoading(false);
+
+      if (!lbRes.ok || lbData.error) {
+        setLeaderboardErr(lbData.error ?? "Failed to load leaderboard");
+        setEntries([]);
+        setTotalCount(0);
+      } else {
+        setLeaderboardErr(null);
+        setEntries(lbData.entries ?? []);
+        setTotalCount(lbData.total_count ?? 0);
+      }
+      setLoadingLeaderboard(false);
     })();
 
-    const cancelRef = { current: null as (() => void) | null };
-    queueMicrotask(() => { cancelRef.current = fetchLeaderboard(); });
     return () => {
       cancelled = true;
-      cancelRef.current?.();
     };
-  }, [leagueId, fetchLeaderboard]);
+  }, [leagueId, router]);
 
   const copyInviteCode = useCallback(() => {
     if (!inviteCode) return;
@@ -236,6 +257,10 @@ export default function LeagueDetailPage() {
               )}
             </section>
 
+            {leaderboardErr && (
+              <p className="text-destructive text-sm mb-3">{leaderboardErr}</p>
+            )}
+
             {/* Leaderboard table */}
             <div>
               <LeaderboardTable
@@ -250,9 +275,11 @@ export default function LeagueDetailPage() {
                 Showing top {PAGE_SIZE} of {totalCount}. Use the main Leaderboard page to search or filter by gameweek.
               </p>
             )}
-            <div className="mt-8">
-              <ChatPanel scope="league" leagueId={leagueId} title={`${leagueName} chat`} />
-            </div>
+            {!loadingLeaderboard && (
+              <div className="mt-8">
+                <ChatPanel scope="league" leagueId={leagueId} title={`${leagueName} chat`} />
+              </div>
+            )}
           </>
         )}
       </div>

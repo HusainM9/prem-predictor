@@ -16,8 +16,12 @@ export type LeagueSummaryItem = {
   rank_change: number | null;
 };
 
+/** PostgREST `in` URL size stays reasonable; beyond this, fetch all settled globals and filter in memory. */
+const MAX_USER_IDS_FOR_PRED_IN = 200;
+
 /**
  * Leagues the current user is a member of, ordered by joined_at.
+ * Optional `?leagueId=` returns only that league's summary (must be a member); used by league detail to avoid recomputing every league.
  */
 export async function GET(req: Request) {
   try {
@@ -74,6 +78,11 @@ export async function GET(req: Request) {
       return NextResponse.json({ leagues: [] });
     }
 
+    const scopeLeagueId = new URL(req.url).searchParams.get("leagueId")?.trim() ?? null;
+    if (scopeLeagueId && !leagueIds.includes(scopeLeagueId)) {
+      return NextResponse.json({ error: "Not a member of this league" }, { status: 403 });
+    }
+
     const { data: leagues, error: leagueErr } = await supabase
       .from("leagues")
       .select("id, name, invite_code")
@@ -88,12 +97,32 @@ export async function GET(req: Request) {
       .map((id) => byId.get(id))
       .filter(Boolean) as { id: string; name: string; invite_code: string | null }[];
 
-    // Global predictions (one prediction applies to all leagues)
-    const { data: predRows, error: predErr } = await supabase
+    const leaguesToProcess = scopeLeagueId
+      ? ordered.filter((l) => l.id === scopeLeagueId)
+      : ordered;
+
+    const memberLeagueIdsForQuery = scopeLeagueId ? [scopeLeagueId] : leagueIds;
+    const { data: memberRows } = await supabase
+      .from("league_members")
+      .select("league_id, user_id")
+      .in("league_id", memberLeagueIdsForQuery);
+
+    const unionUserIds = new Set<string>();
+    for (const m of memberRows ?? []) {
+      unionUserIds.add(m.user_id as string);
+    }
+    const unionArr = [...unionUserIds];
+
+    let predQuery = supabase
       .from("predictions")
       .select("user_id, points_awarded, bonus_exact_score_points, fixture_id")
       .not("settled_at", "is", null)
       .is("league_id", null);
+    if (unionArr.length > 0 && unionArr.length <= MAX_USER_IDS_FOR_PRED_IN) {
+      predQuery = predQuery.in("user_id", unionArr);
+    }
+
+    const { data: predRows, error: predErr } = await predQuery;
 
     if (predErr) {
       return NextResponse.json({ error: predErr.message }, { status: 500 });
@@ -126,12 +155,6 @@ export async function GET(req: Request) {
       previousGwFixtureIds = new Set((prevFixtures ?? []).map((f) => f.id));
     }
 
-    // Per-league: member count, member ids, then filter preds and aggregate
-    const { data: memberRows } = await supabase
-      .from("league_members")
-      .select("league_id, user_id")
-      .in("league_id", leagueIds);
-
     const membersByLeague = new Map<string, Set<string>>();
     for (const m of memberRows ?? []) {
       const set = membersByLeague.get(m.league_id) ?? new Set();
@@ -141,7 +164,7 @@ export async function GET(req: Request) {
 
     const result: LeagueSummaryItem[] = [];
 
-    for (const league of ordered) {
+    for (const league of leaguesToProcess) {
       const memberIds = membersByLeague.get(league.id) ?? new Set<string>();
       const memberCount = memberIds.size;
       const filtered = allPreds.filter((r) => memberIds.has(r.user_id));
