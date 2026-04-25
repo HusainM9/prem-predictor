@@ -26,52 +26,76 @@ export default function HistoryPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          if (!cancelled) {
+            setErr("Please log in to see your history.");
+            setLoading(false);
+            setGotwLoading(false);
+          }
+          return;
+        }
+        const headers = { Authorization: `Bearer ${session.access_token}` };
+
+        // Load prediction history first so core page controls are usable even if GOTW fails/slows.
+        try {
+          const predRes = await fetch("/api/predictions/history", { headers });
+          const data = await predRes.json();
+          if (cancelled) return;
+          if (!predRes.ok) {
+            setErr(data.error ?? predRes.statusText);
+            setByGameweek({});
+          } else {
+            const byGw = data.by_gameweek ?? {};
+            setByGameweek(byGw);
+            const cgw = data.current_gameweek ?? null;
+            setCurrentGameweek(cgw);
+            if (cgw != null && selectedGameweek === 1) {
+              setSelectedGameweek(cgw);
+            }
+            setTotalPoints(sumTotalPointsFromByGameweek(byGw));
+          }
+        } catch (predErr: unknown) {
+          if (!cancelled) {
+            setErr(predErr instanceof Error ? predErr.message : "Failed to load history.");
+            setByGameweek({});
+          }
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+
+        // GOTW is secondary; load independently so it cannot block the whole page.
+        try {
+          const gotwRes = await fetch("/api/game-of-the-week/history", { headers });
+          if (gotwRes.ok) {
+            const gotwData = await gotwRes.json();
+            if (!cancelled) {
+              setGotwEntries(Array.isArray(gotwData.entries) ? gotwData.entries : []);
+              setGotwError(null);
+            }
+          } else {
+            const gotwData = await gotwRes.json().catch(() => ({}));
+            if (!cancelled) {
+              setGotwEntries([]);
+              setGotwError((gotwData as { error?: string }).error ?? gotwRes.statusText);
+            }
+          }
+        } catch (gotwErr: unknown) {
+          if (!cancelled) {
+            setGotwEntries([]);
+            setGotwError(gotwErr instanceof Error ? gotwErr.message : "Failed to load match-of-the-week history.");
+          }
+        } finally {
+          if (!cancelled) setGotwLoading(false);
+        }
+      } catch (sessionErr: unknown) {
         if (!cancelled) {
-          setErr("Please log in to see your history.");
+          setErr(sessionErr instanceof Error ? sessionErr.message : "Failed to load history.");
           setLoading(false);
           setGotwLoading(false);
         }
-        return;
       }
-      const headers = { Authorization: `Bearer ${session.access_token}` };
-      const [predRes, gotwRes] = await Promise.all([
-        fetch("/api/predictions/history", { headers }),
-        fetch("/api/game-of-the-week/history", { headers }),
-      ]);
-      const data = await predRes.json();
-      if (cancelled) return;
-      if (!predRes.ok) {
-        setErr(data.error ?? predRes.statusText);
-        setByGameweek({});
-      } else {
-        const byGw = data.by_gameweek ?? {};
-        setByGameweek(byGw);
-        const cgw = data.current_gameweek ?? null;
-        setCurrentGameweek(cgw);
-        if (cgw != null && selectedGameweek === 1) {
-          setSelectedGameweek(cgw);
-        }
-        setTotalPoints(sumTotalPointsFromByGameweek(byGw));
-      }
-
-      if (gotwRes.ok) {
-        const gotwData = await gotwRes.json();
-        if (!cancelled) {
-          setGotwEntries(Array.isArray(gotwData.entries) ? gotwData.entries : []);
-          setGotwError(null);
-        }
-      } else {
-        const gotwData = await gotwRes.json().catch(() => ({}));
-        if (!cancelled) {
-          setGotwEntries([]);
-          setGotwError((gotwData as { error?: string }).error ?? gotwRes.statusText);
-        }
-      }
-
-      setLoading(false);
-      setGotwLoading(false);
     })();
     return () => {
       cancelled = true;
