@@ -9,6 +9,9 @@ import { ChatPanel } from "@/components/chat/ChatPanel";
 
 const PAGE_SIZE = 50;
 
+/** Same ID as server `GLOBAL_LEAGUE_ID` / `NEXT_PUBLIC_GLOBAL_LEAGUE_ID` — league page chat would duplicate the app-wide Global chat. */
+const GLOBAL_LEAGUE_ID_CLIENT = process.env.NEXT_PUBLIC_GLOBAL_LEAGUE_ID?.trim() ?? null;
+
 function getLeagueInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase().slice(0, 2);
@@ -19,6 +22,8 @@ export default function LeagueDetailPage() {
   const params = useParams();
   const router = useRouter();
   const leagueId = typeof params.leagueId === "string" ? params.leagueId : null;
+  const isAppGlobalLeague =
+    GLOBAL_LEAGUE_ID_CLIENT != null && leagueId != null && leagueId === GLOBAL_LEAGUE_ID_CLIENT;
 
   const [leagueName, setLeagueName] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
@@ -275,7 +280,13 @@ export default function LeagueDetailPage() {
                 Showing top {PAGE_SIZE} of {totalCount}. Use the main Leaderboard page to search or filter by gameweek.
               </p>
             )}
-            {!loadingLeaderboard && (
+            {!loadingLeaderboard && isAppGlobalLeague && (
+              <p className="mt-8 text-sm text-muted-foreground">
+                League chat is not shown here use{" "}
+                <span className="font-medium text-foreground">Global chat</span> accessed from the bottom right of the screen.
+              </p>
+            )}
+            {!loadingLeaderboard && !isAppGlobalLeague && (
               <div className="mt-8">
                 <ChatPanel scope="league" leagueId={leagueId} title={`${leagueName} chat`} />
               </div>
