@@ -1,7 +1,8 @@
 const HOUR_MS = 60 * 60 * 1000;
 
 /**
- * How long chat messages are kept in the database and returned by the API.
+ * How long **global** (non-league) chat messages are kept in the database and returned by the API.
+ * League-scoped messages are not time-deleted; see messages API and cleanup cron.
  * Set `CHAT_MESSAGE_RETENTION_HOURS` (e.g. `1` for one hour) in the server environment.
  */
 export function getChatMessageRetentionMs(): number {

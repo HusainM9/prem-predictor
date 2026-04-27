@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { CHAT_PAGE_SIZE } from "@/lib/chat/limits";
 
-const DEFAULT_CHAT_RETENTION_MS = 60 * 60 * 1000;
+const DEFAULT_RETENTION_WHEN_UNKNOWN_MS = 60 * 60 * 1000;
 
 function pruneByRetention(messages: ChatMessage[], maxAgeMs: number): ChatMessage[] {
   const cutoff = Date.now() - maxAgeMs;
@@ -13,7 +14,12 @@ function pruneByRetention(messages: ChatMessage[], maxAgeMs: number): ChatMessag
   });
 }
 
-export type ChatScope = "general" | "league";
+function applyRetentionList(list: ChatMessage[], maxAgeMs: number | null | undefined): ChatMessage[] {
+  if (maxAgeMs == null || !Number.isFinite(maxAgeMs) || maxAgeMs > 7 * 24 * 60 * 60 * 1000) {
+    return list;
+  }
+  return pruneByRetention(list, maxAgeMs);
+}
 
 export type ChatMessage = {
   id: string;
@@ -27,12 +33,6 @@ export type ChatMessage = {
   sender_favourite_team: string | null;
   pending?: boolean;
   failed?: boolean;
-};
-
-export type ChatReplyMeta = {
-  reply_to_message_id: string;
-  reply_to_sender_display_name: string;
-  reply_to_text: string;
 };
 
 export type ShareablePrediction = {
@@ -51,23 +51,38 @@ export type ShareablePrediction = {
     away_team: string;
     kickoff_time: string;
     gameweek: number;
-    status: string | null;
+    status: string;
     home_goals: number | null;
     away_goals: number | null;
   };
 };
 
+export type ChatReplyMeta = {
+  reply_to_message_id: string;
+  reply_to_sender_display_name: string;
+  reply_to_text: string;
+};
+
+export type ChatScope = "general" | "league";
+
 type UseChatOptions = {
   scope: ChatScope;
   leagueId?: string | null;
+  /** Per-request page size; default 25. */
   limit?: number;
 };
 
-function buildQueryString(scope: ChatScope, leagueId?: string | null, limit = 50): string {
+function buildQueryString(
+  scope: "general" | "league",
+  leagueId: string | null | undefined,
+  pageSize: number,
+  before?: string | null
+): string {
   const params = new URLSearchParams();
   params.set("scope", scope);
-  params.set("limit", String(limit));
+  params.set("limit", String(pageSize));
   if (scope === "league" && leagueId) params.set("leagueId", leagueId);
+  if (before && before.trim()) params.set("before", before.trim());
   return params.toString();
 }
 
@@ -82,44 +97,140 @@ function dedupeById(messages: ChatMessage[]): ChatMessage[] {
   return out;
 }
 
-export function useChatMessages({ scope, leagueId = null, limit = 50 }: UseChatOptions) {
+export function useChatMessages({ scope, leagueId = null, limit = CHAT_PAGE_SIZE }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const retentionMsRef = useRef(DEFAULT_CHAT_RETENTION_MS);
+  const retentionMsRef = useRef<number | null | undefined>(null);
+  /** Drives the periodic prune; ref alone does not re-render. */
+  const [retentionMsForPrune, setRetentionMsForPrune] = useState<number | null>(null);
   const channelKey = useMemo(() => `${scope}:${leagueId ?? "global"}`, [scope, leagueId]);
+
+  const maxAgeForPrune = useMemo(() => {
+    const v = retentionMsForPrune;
+    if (v == null) return null;
+    if (!Number.isFinite(v) || v > 7 * 24 * 60 * 60 * 1000) return null;
+    return v;
+  }, [retentionMsForPrune]);
+
+  const fetchPage = useCallback(
+    async (opts: { before?: string | null; replace: boolean }): Promise<void> => {
+      setError(null);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        if (opts.replace) {
+          setMessages([]);
+          setHasMore(false);
+          setLoading(false);
+        }
+        return;
+      }
+
+      const qs = buildQueryString(scope, leagueId, limit, opts.before);
+      const res = await fetch(`/api/chat/messages?${qs}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(typeof data.error === "string" ? data.error : "Failed to load chat");
+        if (opts.replace) {
+          setMessages([]);
+          setHasMore(false);
+        }
+        if (opts.replace) setLoading(false);
+        if (!opts.replace) setLoadingMore(false);
+        return;
+      }
+
+      const maxAgeRaw = data.retention?.maxAgeMs;
+      if (maxAgeRaw == null) {
+        retentionMsRef.current = null;
+        setRetentionMsForPrune(null);
+      } else if (typeof maxAgeRaw === "number" && maxAgeRaw > 0) {
+        retentionMsRef.current = maxAgeRaw;
+        setRetentionMsForPrune(maxAgeRaw);
+      } else {
+        retentionMsRef.current = DEFAULT_RETENTION_WHEN_UNKNOWN_MS;
+        setRetentionMsForPrune(DEFAULT_RETENTION_WHEN_UNKNOWN_MS);
+      }
+
+      const list = Array.isArray(data.messages) ? (data.messages as ChatMessage[]) : [];
+      const more = data.hasMore === true;
+      const maxAge = retentionMsRef.current;
+
+      if (opts.replace) {
+        setMessages(applyRetentionList(list, maxAge));
+        setHasMore(more);
+        setLoading(false);
+        return;
+      }
+
+      // Load older: prepend
+      setMessages((prev) => {
+        const merged = dedupeById([...list, ...prev]).sort((a, b) => a.created_at.localeCompare(b.created_at));
+        return applyRetentionList(merged, maxAge);
+      });
+      setHasMore(more);
+      setLoadingMore(false);
+    },
+    [leagueId, limit, scope]
+  );
 
   const fetchInitial = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setHasMore(false);
+    await fetchPage({ replace: true });
+  }, [fetchPage]);
+
+  const loadOlder = useCallback(async () => {
+    if (loading || loadingMore || !hasMore) return;
+    const ordered = [...messages].sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const oldest = ordered[0];
+    if (!oldest) return;
+    setLoadingMore(true);
+    try {
+      await fetchPage({ before: oldest.created_at, replace: false });
+    } catch {
+      setLoadingMore(false);
+    }
+  }, [fetchPage, hasMore, loading, loadingMore, messages]);
+
+  /** Merge the latest "page" from the server with older messages we already paged in (Realtime insert). */
+  const mergeLatestTail = useCallback(async () => {
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      setMessages([]);
-      setLoading(false);
-      return;
-    }
+    if (!session?.access_token) return;
 
-    const qs = buildQueryString(scope, leagueId, limit);
+    const qs = buildQueryString(scope, leagueId, limit, null);
     const res = await fetch(`/api/chat/messages?${qs}`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.error === "string" ? data.error : "Failed to load chat");
-      setMessages([]);
-      setLoading(false);
-      return;
-    }
+    if (!res.ok) return;
     const maxAge =
-      typeof data.retention?.maxAgeMs === "number" && data.retention.maxAgeMs > 0
-        ? data.retention.maxAgeMs
-        : DEFAULT_CHAT_RETENTION_MS;
+      data.retention?.maxAgeMs == null
+        ? null
+        : typeof data.retention.maxAgeMs === "number" && data.retention.maxAgeMs > 0
+          ? data.retention.maxAgeMs
+          : DEFAULT_RETENTION_WHEN_UNKNOWN_MS;
     retentionMsRef.current = maxAge;
-    const list = Array.isArray(data.messages) ? (data.messages as ChatMessage[]) : [];
-    setMessages(pruneByRetention(list, maxAge));
-    setLoading(false);
+    setRetentionMsForPrune(maxAge ?? null);
+    const tail = Array.isArray(data.messages) ? (data.messages as ChatMessage[]) : [];
+    if (tail.length === 0) return;
+    setMessages((prev) => {
+      const tMin = tail[0].created_at;
+      const kept = prev.filter((m) => m.created_at < tMin);
+      const merged = dedupeById([...kept, ...tail]).sort((a, b) => a.created_at.localeCompare(b.created_at));
+      return applyRetentionList(merged, maxAge);
+    });
+    if (data.hasMore === true) {
+      setHasMore(true);
+    }
   }, [leagueId, limit, scope]);
 
   useEffect(() => {
@@ -128,13 +239,14 @@ export function useChatMessages({ scope, leagueId = null, limit = 50 }: UseChatO
     });
   }, [fetchInitial]);
 
-  /** Drop messages that scroll past the server retention window while the tab stays open. */
+  /** Drop past retention for global chat while tab stays open; league is long-term. */
   useEffect(() => {
+    if (maxAgeForPrune == null) return;
     const id = setInterval(() => {
-      setMessages((prev) => pruneByRetention(prev, retentionMsRef.current));
+      setMessages((prev) => pruneByRetention(prev, maxAgeForPrune));
     }, 30_000);
     return () => clearInterval(id);
-  }, []);
+  }, [maxAgeForPrune]);
 
   useEffect(() => {
     const filter =
@@ -155,7 +267,7 @@ export function useChatMessages({ scope, leagueId = null, limit = 50 }: UseChatO
           ...(filter ? { filter } : {}),
         },
         () => {
-          void fetchInitial();
+          void mergeLatestTail();
         }
       )
       .subscribe();
@@ -163,7 +275,7 @@ export function useChatMessages({ scope, leagueId = null, limit = 50 }: UseChatO
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [channelKey, fetchInitial, leagueId, scope]);
+  }, [channelKey, leagueId, mergeLatestTail, scope]);
 
   const sendMessage = useCallback(
     async ({
@@ -206,7 +318,10 @@ export function useChatMessages({ scope, leagueId = null, limit = 50 }: UseChatO
         sender_favourite_team: null,
         pending: true,
       };
-      setMessages((prev) => dedupeById([...prev, optimistic]));
+      setMessages((prev) => {
+        const next = dedupeById([...prev, optimistic]).sort((a, b) => a.created_at.localeCompare(b.created_at));
+        return applyRetentionList(next, retentionMsRef.current);
+      });
 
       const res = await fetch("/api/chat/messages", {
         method: "POST",
@@ -243,7 +358,7 @@ export function useChatMessages({ scope, leagueId = null, limit = 50 }: UseChatO
           .filter((m) => m.id !== tempId)
           .concat(confirmed ? [confirmed] : []);
         const next = dedupeById(replaced).sort((a, b) => a.created_at.localeCompare(b.created_at));
-        return pruneByRetention(next, retentionMsRef.current);
+        return applyRetentionList(next, retentionMsRef.current);
       });
       return true;
     },
@@ -301,11 +416,13 @@ export function useChatMessages({ scope, leagueId = null, limit = 50 }: UseChatO
   return {
     messages,
     loading,
+    loadingMore,
+    hasMore,
     error,
     sendTextMessage,
     sendPredictionShare,
     fetchShareablePredictions,
     refresh: fetchInitial,
+    loadOlder,
   };
 }
-

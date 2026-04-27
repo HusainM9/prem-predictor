@@ -33,9 +33,11 @@ async function runChatCleanup() {
 
   try {
     for (;;) {
+      /** Only **global** chat; league messages are kept long-term. */
       const { data: stale, error: selErr } = await supabase
         .from("messages")
         .select("id")
+        .is("league_id", null)
         .lt("created_at", boundary)
         .limit(BATCH);
 

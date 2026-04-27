@@ -3,6 +3,14 @@ import { createClient } from "@supabase/supabase-js";
 import { buildPredictionSharePayload, type ShareablePredictionRow } from "@/lib/chat/prediction-share";
 import { validateChatText } from "@/lib/chat/moderation";
 import { getChatMessageRetentionMs, getChatMessagesNotBeforeIso } from "@/lib/chat/retention";
+import {
+  CHAT_DUPLICATE_WINDOW_MS,
+  CHAT_PAGE_SIZE,
+  CHAT_SLOW_MODE_MS,
+  getPredictionIdFromSharePayload,
+  normalizeTextForDuplicateCheck,
+} from "@/lib/chat/limits";
+import { isRateLimited } from "@/lib/rate-limit";
 
 type Scope = "general" | "league";
 type ReplyMetadata = {
@@ -151,8 +159,9 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const scope = parseScope(searchParams.get("scope"));
     const leagueId = searchParams.get("leagueId")?.trim() ?? null;
-    const limitRaw = Number(searchParams.get("limit") ?? 50);
-    const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, Math.trunc(limitRaw))) : 50;
+    const before = searchParams.get("before")?.trim() ?? null;
+    const limitRaw = Number(searchParams.get("limit") ?? CHAT_PAGE_SIZE);
+    const pageSize = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, Math.trunc(limitRaw))) : CHAT_PAGE_SIZE;
 
     if (scope === "league") {
       if (!leagueId) {
@@ -162,15 +171,20 @@ export async function GET(req: Request) {
       if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const notBeforeIso = getChatMessagesNotBeforeIso();
+    const notBeforeIso = scope === "general" ? getChatMessagesNotBeforeIso() : null;
 
     let query = supabase
       .from("messages")
       .select("id,user_id,league_id,message_type,text,prediction_payload,created_at")
-      .gte("created_at", notBeforeIso)
       .order("created_at", { ascending: false })
-      .limit(limit);
+      .limit(pageSize);
 
+    if (notBeforeIso) {
+      query = query.gte("created_at", notBeforeIso);
+    }
+    if (before) {
+      query = query.lt("created_at", before);
+    }
     if (scope === "general") query = query.is("league_id", null);
     else query = query.eq("league_id", leagueId);
 
@@ -205,9 +219,16 @@ export async function GET(req: Request) {
       );
     }
 
+    const hasMore = rows.length === pageSize;
     return NextResponse.json({
       messages: normalizeMessageRows(ordered, profileByUser),
-      retention: { maxAgeMs: getChatMessageRetentionMs() },
+      hasMore,
+      pageSize,
+      /** Global chat only: retention window. League chat has no time cap. */
+      retention: {
+        maxAgeMs: scope === "general" ? getChatMessageRetentionMs() : null,
+      },
+      leagueLongTerm: scope === "league",
     });
   } catch (err: unknown) {
     return NextResponse.json(
@@ -217,12 +238,78 @@ export async function GET(req: Request) {
   }
 }
 
+type RecentMessage = {
+  created_at: string;
+  text: string | null;
+  message_type: string;
+  prediction_payload: unknown;
+};
+
+function assertSlowModeAndNotDuplicate(
+  recent: RecentMessage[] | null | undefined,
+  params: {
+    messageType: "text" | "prediction_share";
+    textNormalized: string;
+    newPredictionId: string | null;
+  }
+): { ok: true } | { ok: false; error: string; status: number } {
+  const list = recent ?? [];
+  if (list.length === 0) return { ok: true };
+
+  const mostRecent = list[0];
+  const mostRecentMs = new Date(mostRecent.created_at).getTime();
+  if (!Number.isFinite(mostRecentMs)) return { ok: true };
+  if (Date.now() - mostRecentMs < CHAT_SLOW_MODE_MS) {
+    const waitSec = Math.max(1, Math.ceil((CHAT_SLOW_MODE_MS - (Date.now() - mostRecentMs)) / 1000));
+    return {
+      ok: false,
+      error: `Slow mode: wait ${waitSec}s before sending another message.`,
+      status: 429,
+    };
+  }
+
+  const windowStart = Date.now() - CHAT_DUPLICATE_WINDOW_MS;
+  for (const m of list) {
+    const t = new Date(m.created_at).getTime();
+    if (!Number.isFinite(t) || t < windowStart) break;
+
+    if (params.messageType === "text" && m.message_type === "text") {
+      const prevNorm = normalizeTextForDuplicateCheck(typeof m.text === "string" ? m.text : "");
+      if (prevNorm && prevNorm === params.textNormalized) {
+        return {
+          ok: false,
+          error: "You recently sent the same message. Try again in a minute or change the text.",
+          status: 400,
+        };
+      }
+    }
+    if (params.messageType === "prediction_share" && m.message_type === "prediction_share" && params.newPredictionId) {
+      const prevPid = getPredictionIdFromSharePayload(m.prediction_payload);
+      if (prevPid && prevPid === params.newPredictionId) {
+        return {
+          ok: false,
+          error: "You already shared this prediction in the last minute.",
+          status: 400,
+        };
+      }
+    }
+  }
+  return { ok: true };
+}
+
 export async function POST(req: Request) {
   try {
     const authHeader = req.headers.get("authorization");
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
     const viewer = await getViewer(token);
     if (!viewer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    if (isRateLimited(`chat:post:${viewer.id}`, 45, 60_000)) {
+      return NextResponse.json(
+        { error: "You are sending messages too quickly. Please wait a moment." },
+        { status: 429 }
+      );
+    }
 
     const { supabase } = await getClients();
     const body = await req.json().catch(() => ({}));
@@ -263,6 +350,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: textValidation.error }, { status: 400 });
     }
 
+    let recentQuery = supabase
+      .from("messages")
+      .select("created_at,text,message_type,prediction_payload")
+      .eq("user_id", viewer.id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (scope === "general") {
+      recentQuery = recentQuery.is("league_id", null);
+    } else {
+      recentQuery = recentQuery.eq("league_id", leagueId as string);
+    }
+    const { data: recentRows, error: recentErr } = await recentQuery;
+    if (recentErr) {
+      return NextResponse.json({ error: recentErr.message }, { status: 500 });
+    }
+    const recent = (recentRows ?? []) as RecentMessage[];
+
     let predictionPayload: ReturnType<typeof buildPredictionSharePayload> | null = null;
     let replyMetadata: ReplyMetadata | null = null;
     if (messageType === "prediction_share") {
@@ -275,6 +379,20 @@ export async function POST(req: Request) {
       }
       predictionPayload = buildPredictionSharePayload(prediction);
     }
+
+    const textForDup =
+      messageType === "text" ? normalizeTextForDuplicateCheck(textValidation.value) : "";
+    const newPid = messageType === "prediction_share" && predictionId ? predictionId : null;
+
+    const guard = assertSlowModeAndNotDuplicate(recent, {
+      messageType,
+      textNormalized: textForDup,
+      newPredictionId: newPid,
+    });
+    if (!guard.ok) {
+      return NextResponse.json({ error: guard.error }, { status: guard.status });
+    }
+
     if (messageType === "text" && replyToMessageId) {
       const { data: replyMessage } = await supabase
         .from("messages")
@@ -342,4 +460,3 @@ export async function POST(req: Request) {
     );
   }
 }
-

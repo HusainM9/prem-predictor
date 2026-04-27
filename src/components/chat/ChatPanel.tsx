@@ -127,10 +127,13 @@ export function ChatPanel({
   const {
     messages,
     loading,
+    loadingMore,
+    hasMore,
     error,
     sendTextMessage,
     sendPredictionShare,
     fetchShareablePredictions,
+    loadOlder,
   } = useChatMessages({ scope, leagueId });
 
   const ordered = useMemo(
@@ -390,6 +393,29 @@ export function ChatPanel({
         ref={listRef}
         className={`${messageListClassName ?? "h-[280px]"} overflow-y-auto px-3 py-3 space-y-2`}
       >
+        {hasMore && (
+          <div className="flex flex-col items-center gap-1 pb-1">
+            {loadingMore ? (
+              <p className="text-xs text-muted-foreground">Loading older messages…</p>
+            ) : (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="text-xs"
+                onClick={() => void loadOlder()}
+                disabled={loading}
+              >
+                Load older messages
+              </Button>
+            )}
+            {scope === "league" && (
+              <p className="text-[10px] text-muted-foreground text-center max-w-[240px]">
+                League history is kept. Global chat still rolls off after the retention window.
+              </p>
+            )}
+          </div>
+        )}
         {loading && <p className="text-sm text-muted-foreground">Loading chat…</p>}
         {!loading && ordered.length === 0 && (
           <p className="text-sm text-muted-foreground">No messages yet. Start the conversation.</p>

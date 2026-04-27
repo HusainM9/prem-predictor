@@ -43,8 +43,10 @@ export default function PlayPage() {
   const [now, setNow] = useState(() => Date.now());
   const [predictionMeta, setPredictionMeta] = useState<Record<string, PredictionMeta>>({});
   const autoSavedLockRef = useRef<Set<string>>(new Set());
+  const fixtureCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   /** Fixture id that won the last game-of-the-week vote . */
   const [matchOfTheWeekFixtureId, setMatchOfTheWeekFixtureId] = useState<string | null>(null);
+  const [showFinishedMatches, setShowFinishedMatches] = useState(false);
 
   /** Convert predicted score to outcome. H = home win, A = away win, D = draw. */
   function derivedPick(hg: number, ag: number): Pick | null {
@@ -59,10 +61,14 @@ export default function PlayPage() {
     [fixtures, alreadySavedFixtureIds]
   );
 
-  /** fixtures in order. Sorted by actual kickoff time */
-  const groups = useMemo(() => {
+  const setFixtureCardRef = useCallback((fixtureId: string, node: HTMLDivElement | null) => {
+    fixtureCardRefs.current[fixtureId] = node;
+  }, []);
+
+  /** Group fixtures by kickoff label in kickoff order. */
+  const groupFixtures = useCallback((list: PlayFixtureRow[]) => {
     const map = new Map<string, PlayFixtureRow[]>();
-    for (const f of fixtures) {
+    for (const f of list) {
       const key = kickoffGroupKey(f.kickoff_time);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(f);
@@ -77,7 +83,23 @@ export default function PlayPage() {
       const sorted = [...list].sort((a, b) => a.kickoff_time.localeCompare(b.kickoff_time));
       return [label, sorted] as [string, PlayFixtureRow[]];
     });
-  }, [fixtures]);
+  }, []);
+
+  /** Fixtures split into active vs finished, each grouped by kickoff. */
+  const { activeGroups, finishedGroups, finishedCount } = useMemo(() => {
+    const active: PlayFixtureRow[] = [];
+    const finished: PlayFixtureRow[] = [];
+    for (const f of fixtures) {
+      const statusLower = (f.status ?? "").toLowerCase();
+      if (statusLower === "finished") finished.push(f);
+      else active.push(f);
+    }
+    return {
+      activeGroups: groupFixtures(active),
+      finishedGroups: groupFixtures(finished),
+      finishedCount: finished.length,
+    };
+  }, [fixtures, groupFixtures]);
 
   /** Countdown to next upcoming kickoff in this list */
   const countdown = useMemo(() => {
@@ -339,15 +361,30 @@ export default function PlayPage() {
     };
   }, [fixtures, alreadySavedFixtureIds, homeGoals, awayGoals, savePrediction]);
 
-  function isFixtureEditable(f: PlayFixtureRow): boolean {
+  function isFixtureEditable(f: PlayFixtureRow, nowMs: number = Date.now()): boolean {
     const statusLower = (f.status ?? "").toLowerCase();
-    const kickoffPassed = new Date(f.kickoff_time).getTime() <= Date.now();
+    const kickoffPassed = new Date(f.kickoff_time).getTime() <= nowMs;
     return statusLower === "scheduled" && !kickoffPassed;
   }
 
+  const nextPredictionFixtureId = useMemo(() => {
+    const nextUnsaved = fixtures.find(
+      (f) => isFixtureEditable(f, now) && !alreadySavedFixtureIds.has(f.id)
+    );
+    if (nextUnsaved) return nextUnsaved.id;
+    return fixtures.find((f) => isFixtureEditable(f, now))?.id ?? null;
+  }, [fixtures, alreadySavedFixtureIds, now]);
+
+  const jumpToNextPrediction = useCallback(() => {
+    if (!nextPredictionFixtureId) return;
+    const node = fixtureCardRefs.current[nextPredictionFixtureId];
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [nextPredictionFixtureId]);
+
   async function saveAll() {
     for (const f of fixtures) {
-      if (!isFixtureEditable(f)) continue;
+      if (!isFixtureEditable(f, now)) continue;
       const hgStr = homeGoals[f.id];
       const agStr = awayGoals[f.id];
       const hasInput = (hgStr ?? "") !== "" || (agStr ?? "") !== "";
@@ -358,7 +395,7 @@ export default function PlayPage() {
   }
 
   const hasUnsaved = fixtures.some((f) => {
-    if (!isFixtureEditable(f)) return false;
+    if (!isFixtureEditable(f, now)) return false;
     const hg = (homeGoals[f.id] ?? "").trim();
     const ag = (awayGoals[f.id] ?? "").trim();
     return hg !== "" && ag !== "" && !alreadySavedFixtureIds.has(f.id);
@@ -450,7 +487,7 @@ export default function PlayPage() {
 
         {!loading && !err && fixtures.length > 0 && (
           <div className="space-y-8">
-            {groups.map(([groupLabel, groupFixtures]) => {
+            {activeGroups.map(([groupLabel, groupFixtures]) => {
               const blockSubmitted = groupFixtures.filter((f) => alreadySavedFixtureIds.has(f.id)).length;
               const blockTotal = groupFixtures.length;
               return (
@@ -465,27 +502,73 @@ export default function PlayPage() {
                   </div>
                   <div className="space-y-3">
                     {groupFixtures.map((f) => (
-                      <PlayMatchCard
-                        key={f.id}
-                        f={f}
-                        nowMs={now}
-                        homeGoals={homeGoals}
-                        awayGoals={awayGoals}
-                        setHomeGoals={setHomeGoals}
-                        setAwayGoals={setAwayGoals}
-                        saving={saving}
-                        msg={msg}
-                        savePrediction={savePrediction}
-                        alreadySavedFixtureIds={alreadySavedFixtureIds}
-                        lastSavedScores={lastSavedScores}
-                        matchOfTheWeekFixtureId={matchOfTheWeekFixtureId}
-                        meta={predictionMeta[f.id]}
-                      />
+                      <div key={f.id} ref={(node) => setFixtureCardRef(f.id, node)}>
+                        <PlayMatchCard
+                          f={f}
+                          nowMs={now}
+                          homeGoals={homeGoals}
+                          awayGoals={awayGoals}
+                          setHomeGoals={setHomeGoals}
+                          setAwayGoals={setAwayGoals}
+                          saving={saving}
+                          msg={msg}
+                          savePrediction={savePrediction}
+                          alreadySavedFixtureIds={alreadySavedFixtureIds}
+                          lastSavedScores={lastSavedScores}
+                          matchOfTheWeekFixtureId={matchOfTheWeekFixtureId}
+                          meta={predictionMeta[f.id]}
+                        />
+                      </div>
                     ))}
                   </div>
                 </section>
               );
             })}
+
+            {finishedCount > 0 && (
+              <section className="border-t border-border pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowFinishedMatches((prev) => !prev)}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+                >
+                  <span aria-hidden>{showFinishedMatches ? "▾" : "▸"}</span>
+                  Finished matches ({finishedCount})
+                </button>
+                {showFinishedMatches && (
+                  <div className="mt-4 space-y-6">
+                    {finishedGroups.map(([groupLabel, groupFixtures]) => (
+                      <section key={`finished-${groupLabel}`}>
+                        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                          {groupLabel}
+                        </h2>
+                        <div className="space-y-3">
+                          {groupFixtures.map((f) => (
+                            <div key={f.id} ref={(node) => setFixtureCardRef(f.id, node)}>
+                              <PlayMatchCard
+                                f={f}
+                                nowMs={now}
+                                homeGoals={homeGoals}
+                                awayGoals={awayGoals}
+                                setHomeGoals={setHomeGoals}
+                                setAwayGoals={setAwayGoals}
+                                saving={saving}
+                                msg={msg}
+                                savePrediction={savePrediction}
+                                alreadySavedFixtureIds={alreadySavedFixtureIds}
+                                lastSavedScores={lastSavedScores}
+                                matchOfTheWeekFixtureId={matchOfTheWeekFixtureId}
+                                meta={predictionMeta[f.id]}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
           </div>
         )}
 
@@ -525,6 +608,18 @@ export default function PlayPage() {
           </footer>
         )}
       </div>
+      {!loading && !err && nextPredictionFixtureId && (
+        <button
+          type="button"
+          onClick={jumpToNextPrediction}
+          className="fixed right-3 top-20 z-50 inline-flex min-h-[40px] items-center gap-1 rounded-full border border-primary/40 bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background sm:right-4 sm:top-24 sm:min-h-[44px] sm:gap-1.5 sm:px-4 sm:text-sm md:right-6 md:top-6"
+          aria-label="Jump to next prediction"
+        >
+          <span aria-hidden>↓</span>
+          <span className="hidden sm:inline">Next prediction</span>
+          <span className="sm:hidden">Next</span>
+        </button>
+      )}
     </main>
   );
 }
