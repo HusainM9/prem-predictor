@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase/client";
 import { CHAT_PAGE_SIZE } from "@/lib/chat/limits";
 
 const DEFAULT_RETENTION_WHEN_UNKNOWN_MS = 60 * 60 * 1000;
+const CHAT_LIVE_REFRESH_INTERVAL_MS = 3_000;
 
 function pruneByRetention(messages: ChatMessage[], maxAgeMs: number): ChatMessage[] {
   const cutoff = Date.now() - maxAgeMs;
@@ -103,6 +104,7 @@ export function useChatMessages({ scope, leagueId = null, limit = CHAT_PAGE_SIZE
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const retentionMsRef = useRef<number | null | undefined>(null);
+  const mergeLatestTailInFlightRef = useRef(false);
   const [retentionMsForPrune, setRetentionMsForPrune] = useState<number | null>(null);
   const channelKey = useMemo(() => `${scope}:${leagueId ?? "global"}`, [scope, leagueId]);
 
@@ -198,38 +200,44 @@ export function useChatMessages({ scope, leagueId = null, limit = CHAT_PAGE_SIZE
 
   /** Merge the latest page with older message*/
   const mergeLatestTail = useCallback(async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) return;
+    if (mergeLatestTailInFlightRef.current) return;
+    mergeLatestTailInFlightRef.current = true;
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
 
-    const qs = buildQueryString(scope, leagueId, limit, null);
-    const res = await fetch(`/api/chat/messages?${qs}`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return;
-    const maxAge =
-      data.retention?.maxAgeMs == null
-        ? null
-        : typeof data.retention.maxAgeMs === "number" && data.retention.maxAgeMs > 0
-          ? data.retention.maxAgeMs
-          : DEFAULT_RETENTION_WHEN_UNKNOWN_MS;
-    retentionMsRef.current = maxAge;
-    setRetentionMsForPrune(maxAge ?? null);
-    const tail = Array.isArray(data.messages) ? (data.messages as ChatMessage[]) : [];
-    if (tail.length === 0) return;
-    setMessages((prev) => {
-      const tMin = tail[0].created_at;
-      const pending = prev.filter((m) => m.pending);
-      const kept = prev.filter((m) => !m.pending && m.created_at < tMin);
-      const merged = dedupeById([...kept, ...tail, ...pending]).sort((a, b) =>
-        a.created_at.localeCompare(b.created_at)
-      );
-      return applyRetentionList(merged, maxAge);
-    });
-    if (data.hasMore === true) {
-      setHasMore(true);
+      const qs = buildQueryString(scope, leagueId, limit, null);
+      const res = await fetch(`/api/chat/messages?${qs}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return;
+      const maxAge =
+        data.retention?.maxAgeMs == null
+          ? null
+          : typeof data.retention.maxAgeMs === "number" && data.retention.maxAgeMs > 0
+            ? data.retention.maxAgeMs
+            : DEFAULT_RETENTION_WHEN_UNKNOWN_MS;
+      retentionMsRef.current = maxAge;
+      setRetentionMsForPrune(maxAge ?? null);
+      const tail = Array.isArray(data.messages) ? (data.messages as ChatMessage[]) : [];
+      if (tail.length === 0) return;
+      setMessages((prev) => {
+        const tMin = tail[0].created_at;
+        const pending = prev.filter((m) => m.pending);
+        const kept = prev.filter((m) => !m.pending && m.created_at < tMin);
+        const merged = dedupeById([...kept, ...tail, ...pending]).sort((a, b) =>
+          a.created_at.localeCompare(b.created_at)
+        );
+        return applyRetentionList(merged, maxAge);
+      });
+      if (data.hasMore === true) {
+        setHasMore(true);
+      }
+    } finally {
+      mergeLatestTailInFlightRef.current = false;
     }
   }, [leagueId, limit, scope]);
 
@@ -293,9 +301,13 @@ export function useChatMessages({ scope, leagueId = null, limit = CHAT_PAGE_SIZE
   }, [mergeLatestTail]);
 
   useEffect(() => {
-    const id = window.setInterval(() => {
-      void mergeLatestTail();
-    }, 12_000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void mergeLatestTail();
+      }
+    };
+    const id = window.setInterval(refreshWhenVisible, CHAT_LIVE_REFRESH_INTERVAL_MS);
+    refreshWhenVisible();
     return () => window.clearInterval(id);
   }, [mergeLatestTail]);
 

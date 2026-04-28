@@ -11,7 +11,6 @@ const HIDE_ON_PATHS = new Set(["/login", "/signup"]);
 
 export function GlobalChatLauncher() {
   const [open, setOpen] = useState(false);
-  /** Once true, keep ChatPanel mounted while authed so realtime + state survive closing the panel. */
   const [chatMounted, setChatMounted] = useState(false);
   const [authed, setAuthed] = useState(false);
   const pathname = usePathname();
@@ -36,10 +35,10 @@ export function GlobalChatLauncher() {
   if (!authed) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-40">
+    <div className="pointer-events-none fixed bottom-4 right-4 z-40">
       {chatMounted && (
         <div
-          className={`mb-2 w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-[420px] sm:max-w-[calc(100vw-2rem)] lg:w-[520px] ${open ? "" : "hidden"}`}
+          className={`pointer-events-auto mb-2 w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-[420px] sm:max-w-[calc(100vw-2rem)] lg:w-[520px] ${open ? "" : "hidden"}`}
           aria-hidden={!open}
         >
           <ChatPanel
@@ -51,7 +50,7 @@ export function GlobalChatLauncher() {
       )}
       <Button
         type="button"
-        className="h-12 w-12 rounded-full shadow-lg"
+        className="pointer-events-auto h-12 w-12 rounded-full shadow-lg"
         onClick={() => {
           setOpen((v) => {
             const next = !v;

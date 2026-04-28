@@ -20,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+const SKIP_FAV_TEAM_KEY = "scoreline_skip_favourite_team_prompt";
+
 export function FavouriteTeamPrompt() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -42,6 +44,15 @@ export function FavouriteTeamPrompt() {
       if (!session || cancelled) {
         setLoading(false);
         return;
+      }
+
+      try {
+        if (typeof window !== "undefined" && sessionStorage.getItem(SKIP_FAV_TEAM_KEY) === "1") {
+          setLoading(false);
+          return;
+        }
+      } catch {
+        /* sessionStorage unavailable */
       }
 
       const res = await fetch("/api/profile", {
@@ -106,6 +117,21 @@ export function FavouriteTeamPrompt() {
     setOpen(false);
   }
 
+  function rememberSkipForSession() {
+    try {
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(SKIP_FAV_TEAM_KEY, "1");
+      }
+    } catch {
+      /* private / blocked storage */
+    }
+  }
+
+  function skipForNow() {
+    rememberSkipForSession();
+    setOpen(false);
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent>
@@ -133,7 +159,10 @@ export function FavouriteTeamPrompt() {
           {msg && <p className="text-sm text-destructive">{msg}</p>}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" onClick={skipForNow}>
+            Skip for now
+          </Button>
           <Button
             type="button"
             onClick={saveFavouriteTeam}

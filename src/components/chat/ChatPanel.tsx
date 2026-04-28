@@ -124,6 +124,8 @@ export function ChatPanel({
   const [reports, setReports] = useState<ChatMessageReport[]>([]);
   const listRef = useRef<HTMLDivElement | null>(null);
   const holdTimerRef = useRef<number | null>(null);
+  const previousLastMessageIdRef = useRef<string | null>(null);
+  const previousScrollHeightRef = useRef(0);
   const {
     messages,
     loading,
@@ -146,6 +148,27 @@ export function ChatPanel({
     pendingById: messageReactionPendingById,
     react: reactToMessage,
   } = useReactions("chat_message", messageIds);
+
+  useEffect(() => {
+    const list = listRef.current;
+    const lastMessageId = ordered[ordered.length - 1]?.id ?? null;
+    if (!list || !lastMessageId) return;
+
+    const previousScrollHeight = previousScrollHeightRef.current;
+    const previousDistanceFromBottom =
+      previousScrollHeight > 0 ? previousScrollHeight - list.scrollTop - list.clientHeight : 0;
+    const previousLastMessageId = previousLastMessageIdRef.current;
+    previousScrollHeightRef.current = list.scrollHeight;
+
+    if (previousLastMessageId === lastMessageId) return;
+
+    const shouldStickToLatest = previousLastMessageId == null || previousDistanceFromBottom < 160;
+    previousLastMessageIdRef.current = lastMessageId;
+
+    if (shouldStickToLatest) {
+      list.scrollTop = list.scrollHeight;
+    }
+  }, [ordered]);
 
   useEffect(() => {
     if (scope !== "league" || !leagueId) return;
