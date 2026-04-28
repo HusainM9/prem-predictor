@@ -68,10 +68,10 @@ function parseGoal(s: string | undefined): number {
   return t === "" ? 0 : Number(t);
 }
 
-function formDotClass(result: "W" | "D" | "L"): string {
-  if (result === "W") return "bg-emerald-500";
-  if (result === "L") return "bg-red-500";
-  return "bg-muted-foreground/60";
+function formChipClass(result: "W" | "D" | "L"): string {
+  if (result === "W") return "border-emerald-400/40 bg-emerald-500/15 text-emerald-300";
+  if (result === "L") return "border-red-400/40 bg-red-500/15 text-red-300";
+  return "border-border bg-muted/40 text-muted-foreground";
 }
 
 function formatShortDate(iso: string): string {
@@ -194,33 +194,64 @@ export function PlayMatchCard({
   const settled = !!meta?.settled_at;
   const homeForm = f.form?.home_team ?? { team: f.home_team, last_five: [] };
   const awayForm = f.form?.away_team ?? { team: f.away_team, last_five: [] };
+  const statusChip =
+    hasFinalScore
+      ? settled
+        ? exactHit
+          ? { text: "Exact score", className: "border-primary/40 bg-primary/15 text-primary" }
+          : resultCorrect
+            ? { text: "Correct result", className: "border-primary/40 bg-primary/10 text-primary" }
+            : { text: "Wrong", className: "border-destructive/40 bg-destructive/15 text-destructive" }
+        : { text: "Awaiting settlement", className: "border-border bg-muted/30 text-muted-foreground" }
+      : currentMatchesSaved
+        ? { text: "Saved", className: "border-primary/40 bg-primary/10 text-primary" }
+        : hasUnsavedChanges
+          ? { text: "Unsaved changes", className: "border-warning/50 bg-warning/15 text-warning" }
+          : locked
+            ? { text: "Odds locked", className: "border-border bg-muted/30 text-muted-foreground" }
+            : editable
+              ? { text: "Open", className: "border-primary/30 bg-primary/10 text-primary" }
+              : { text: "Closed", className: "border-border bg-muted/30 text-muted-foreground" };
 
   return (
-    <div className={`rounded-lg border border-border bg-card p-4 pl-5 border-l-4 ${barColor}`}>
-      <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
+    <div className={`relative overflow-hidden rounded-2xl border border-border/80 bg-card/85 p-4 pl-5 shadow-xl shadow-black/15 ring-1 ring-primary/5 border-l-4 ${barColor}`}>
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+      {isMatchOfTheWeek && (
+        <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-primary/20 blur-3xl" />
+      )}
+
+      <div className="relative mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/60 bg-background/45 px-3 py-2">
         {oddsH != null && oddsD != null && oddsA != null ? (
-          <>
-            <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Market
+            </span>
+            <span className="rounded-full bg-muted/60 px-2 py-1 text-xs font-semibold">
               H {oddsH.toFixed(2)}
             </span>
-            <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium">
+            <span className="rounded-full bg-muted/60 px-2 py-1 text-xs font-semibold">
               D {oddsD.toFixed(2)}
             </span>
-            <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium">
+            <span className="rounded-full bg-muted/60 px-2 py-1 text-xs font-semibold">
               A {oddsA.toFixed(2)}
             </span>
             <span className="text-xs text-muted-foreground">
-              {locked ? "Locked" : oddsSource === "current" ? "● Live odds" : ""}
+              {locked ? "Locked line" : oddsSource === "current" ? "Live odds" : ""}
             </span>
-            {isMatchOfTheWeek && (
-              <span className="ml-2 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">
-                Match of the week
-              </span>
-            )}
-          </>
+          </div>
         ) : (
           <span className="text-xs text-muted-foreground">Odds not available yet</span>
         )}
+        <div className="flex flex-wrap items-center gap-2">
+          {isMatchOfTheWeek && (
+            <span className="rounded-full border border-primary/40 bg-primary/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-primary shadow-sm shadow-primary/10">
+              Match of the week
+            </span>
+          )}
+          <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${statusChip.className}`}>
+            {statusChip.text}
+          </span>
+        </div>
       </div>
 
       {hasFinalScore && (
@@ -258,70 +289,76 @@ export function PlayMatchCard({
         </div>
       )}
 
-      <div className="flex min-h-[4rem] flex-nowrap items-center justify-center gap-2 max-sm:min-h-[4rem] max-sm:gap-2 sm:gap-2.5 md:gap-3">
-        <div className="flex min-w-[64px] shrink items-center justify-end max-sm:min-w-[64px] sm:min-w-[72px]">
-          <TeamDisplay teamName={f.home_team} size={32} align="end" layout="abbr" />
-        </div>
-        <input
-          ref={homeInputRef}
-          value={homeGoals[f.id] ?? ""}
-          onChange={(e) => {
-            const val = e.target.value.replace(/\D/g, "").slice(0, 2);
-            setHomeGoals((h) => ({ ...h, [f.id]: val }));
-            if (val.length === 1) {
-              awayInputRef.current?.focus();
-            }
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              if (editable) void savePrediction(f);
-            }
-          }}
-          inputMode="numeric"
-          placeholder="0"
-          disabled={!editable}
-          aria-label="Home score"
-          className="h-10 w-10 shrink-0 touch-manipulation rounded-md border-2 border-primary bg-background/50 text-center text-base font-semibold text-foreground max-sm:h-10 max-sm:w-10 sm:h-11 sm:w-11 md:min-h-[44px] md:w-12 md:text-lg disabled:cursor-not-allowed disabled:opacity-70"
-        />
-        <span className="shrink-0 font-semibold text-muted-foreground max-sm:text-sm sm:text-base">VS</span>
-        <input
-          ref={awayInputRef}
-          value={awayGoals[f.id] ?? ""}
-          onChange={(e) => {
-            const val = e.target.value.replace(/\D/g, "").slice(0, 2);
-            setAwayGoals((a) => ({ ...a, [f.id]: val }));
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              if (editable) void savePrediction(f);
-            }
-          }}
-          inputMode="numeric"
-          placeholder="0"
-          disabled={!editable}
-          aria-label="Away score"
-          className="h-10 w-10 shrink-0 touch-manipulation rounded-md border-2 border-primary bg-background/50 text-center text-base font-semibold text-foreground max-sm:h-10 max-sm:w-10 sm:h-11 sm:w-11 md:min-h-[44px] md:w-12 md:text-lg disabled:cursor-not-allowed disabled:opacity-70"
-        />
-        <div className="flex min-w-[64px] shrink items-center justify-start max-sm:min-w-[64px] sm:min-w-[72px]">
-          <TeamDisplay teamName={f.away_team} size={32} align="start" layout="abbr" />
+      <div className="relative rounded-2xl border border-border/70 bg-background/50 p-3 shadow-inner shadow-black/10">
+        <div className="flex min-h-[4.5rem] flex-nowrap items-center justify-center gap-2 max-sm:gap-2 sm:gap-3 md:gap-4">
+          <div className="flex min-w-[66px] shrink items-center justify-end max-sm:min-w-[66px] sm:min-w-[82px]">
+            <TeamDisplay teamName={f.home_team} size={36} align="end" layout="abbr" />
+          </div>
+          <input
+            ref={homeInputRef}
+            value={homeGoals[f.id] ?? ""}
+            onChange={(e) => {
+              const val = e.target.value.replace(/\D/g, "").slice(0, 2);
+              setHomeGoals((h) => ({ ...h, [f.id]: val }));
+              if (val.length === 1) {
+                awayInputRef.current?.focus();
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (editable) void savePrediction(f);
+              }
+            }}
+            inputMode="numeric"
+            placeholder="0"
+            disabled={!editable}
+            aria-label="Home score"
+            className="h-12 w-12 shrink-0 touch-manipulation rounded-xl border border-primary/60 bg-card text-center text-xl font-black tabular-nums text-foreground shadow-lg shadow-primary/10 transition focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/20 max-sm:h-11 max-sm:w-11 sm:h-14 sm:w-14 sm:text-2xl disabled:cursor-not-allowed disabled:opacity-70"
+          />
+          <span className="shrink-0 rounded-full border border-border/70 bg-muted/35 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            VS
+          </span>
+          <input
+            ref={awayInputRef}
+            value={awayGoals[f.id] ?? ""}
+            onChange={(e) => {
+              const val = e.target.value.replace(/\D/g, "").slice(0, 2);
+              setAwayGoals((a) => ({ ...a, [f.id]: val }));
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (editable) void savePrediction(f);
+              }
+            }}
+            inputMode="numeric"
+            placeholder="0"
+            disabled={!editable}
+            aria-label="Away score"
+            className="h-12 w-12 shrink-0 touch-manipulation rounded-xl border border-primary/60 bg-card text-center text-xl font-black tabular-nums text-foreground shadow-lg shadow-primary/10 transition focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/20 max-sm:h-11 max-sm:w-11 sm:h-14 sm:w-14 sm:text-2xl disabled:cursor-not-allowed disabled:opacity-70"
+          />
+          <div className="flex min-w-[66px] shrink items-center justify-start max-sm:min-w-[66px] sm:min-w-[82px]">
+            <TeamDisplay teamName={f.away_team} size={36} align="start" layout="abbr" />
+          </div>
         </div>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-          <p className="font-medium text-foreground/90">{homeForm.team} form</p>
-          <div className="mt-2 flex items-center gap-1.5">
+        <div className="rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5 text-xs text-muted-foreground">
+          <p className="font-semibold text-foreground/90">{homeForm.team} form</p>
+          <div className="mt-2 flex items-center gap-1">
             {homeForm.last_five.length === 0 ? (
               <span className="text-[11px] text-muted-foreground">No recent matches</span>
             ) : (
               homeForm.last_five.map((m, idx) => (
                 <span
                   key={`${f.id}-home-form-dot-${idx}`}
-                  className={`inline-block h-2.5 w-2.5 rounded-full ${formDotClass(m.result)}`}
+                  className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md border px-1 text-[10px] font-bold ${formChipClass(m.result)}`}
                   title={`${m.result}: ${m.team} ${m.goals_for}-${m.goals_against} ${m.opponent}`}
-                />
+                >
+                  {m.result}
+                </span>
               ))
             )}
           </div>
@@ -340,18 +377,20 @@ export function PlayMatchCard({
             </details>
           )}
         </div>
-        <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground text-right">
-          <p className="font-medium text-foreground/90">{awayForm.team} form</p>
-          <div className="mt-2 flex items-center justify-end gap-1.5">
+        <div className="rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5 text-xs text-muted-foreground text-right">
+          <p className="font-semibold text-foreground/90">{awayForm.team} form</p>
+          <div className="mt-2 flex items-center justify-end gap-1">
             {awayForm.last_five.length === 0 ? (
               <span className="text-[11px] text-muted-foreground">No recent matches</span>
             ) : (
               awayForm.last_five.map((m, idx) => (
                 <span
                   key={`${f.id}-away-form-dot-${idx}`}
-                  className={`inline-block h-2.5 w-2.5 rounded-full ${formDotClass(m.result)}`}
+                  className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md border px-1 text-[10px] font-bold ${formChipClass(m.result)}`}
                   title={`${m.result}: ${m.team} ${m.goals_for}-${m.goals_against} ${m.opponent}`}
-                />
+                >
+                  {m.result}
+                </span>
               ))
             )}
           </div>
@@ -376,17 +415,38 @@ export function PlayMatchCard({
         {kickoffPassed && !hasFinalScore
           ? "Match in progress or result pending."
           : !kickoffPassed && locked
-            ? "Odds locked — line frozen for points. You can still update your score until kickoff."
+            ? "Odds locked. You can still update your score until kickoff."
             : null}
       </p>
 
       {valid && pick && oddsH != null && oddsD != null && oddsA != null && editable && (
-        <p className="mt-2 text-center text-sm text-muted-foreground">
-          Correct: {correctPointsWithGotw} pts
-          {isMatchOfTheWeek ? " (GOTW Bonus +15)" : ""}
-          {" · "}Exact: +{exactScoreBonusWithGotw} · Wrong: {wrongLoss}
-          {` · ${hg}–${ag} (${pick === "H" ? "Home" : pick === "A" ? "Away" : "Draw"})`}
-        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-border/60 bg-background/45 p-2 text-center text-xs sm:grid-cols-4">
+          <div className="rounded-lg bg-muted/30 px-2 py-2">
+            <p className="text-muted-foreground">Correct</p>
+            <p className="font-bold text-primary">
+              {correctPointsWithGotw} pts
+            </p>
+          </div>
+          <div className="rounded-lg bg-muted/30 px-2 py-2">
+            <p className="text-muted-foreground">Exact</p>
+            <p className="font-bold text-primary">+{exactScoreBonusWithGotw}</p>
+          </div>
+          <div className="rounded-lg bg-muted/30 px-2 py-2">
+            <p className="text-muted-foreground">Wrong</p>
+            <p className="font-bold text-destructive">{wrongLoss}</p>
+          </div>
+          <div className="rounded-lg bg-primary/10 px-2 py-2">
+            <p className="text-muted-foreground">Pick</p>
+            <p className="font-bold text-foreground">
+              {hg}–{ag} {pick === "H" ? "Home" : pick === "A" ? "Away" : "Draw"}
+            </p>
+          </div>
+          {isMatchOfTheWeek && (
+            <p className="col-span-2 text-[11px] font-medium text-primary sm:col-span-4">
+              Match of the Week bonus included.
+            </p>
+          )}
+        </div>
       )}
 
       {editable && (
@@ -395,7 +455,7 @@ export function PlayMatchCard({
             type="button"
             onClick={() => void savePrediction(f)}
             disabled={!!saving[f.id]}
-            className="min-h-[44px] min-w-[120px] touch-manipulation rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-50"
+            className="min-h-[44px] min-w-[132px] touch-manipulation rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20 transition hover:-translate-y-0.5 hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background disabled:translate-y-0 disabled:opacity-50 motion-reduce:transition-none"
           >
             {saving[f.id] ? "Saving…" : currentMatchesSaved ? "Update" : "Save"}
           </button>
@@ -419,7 +479,9 @@ export function PlayMatchCard({
         </p>
       )}
 
-      <FixtureCommunityStats fixtureId={f.id} enabled={hasFinalScore} />
+      <div className="mt-4 border-t border-border/60 pt-3">
+        <FixtureCommunityStats fixtureId={f.id} enabled={hasFinalScore} />
+      </div>
     </div>
   );
 }

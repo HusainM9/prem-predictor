@@ -114,6 +114,12 @@ export default function PlayPage() {
     return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }, [fixtures, now]);
 
+  const nextKickoffLabel = useMemo(() => {
+    const upcoming = fixtures.find((f) => new Date(f.kickoff_time).getTime() > now);
+    if (!upcoming) return null;
+    return formatKickoff(upcoming.kickoff_time);
+  }, [fixtures, now]);
+
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
@@ -420,54 +426,99 @@ export default function PlayPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-4xl px-3 py-4 pb-8 max-sm:px-3 max-sm:py-4 max-sm:pb-8 sm:px-4 sm:py-6 sm:pb-10 md:px-6">
-            {}
-            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-              <Link
-                href="/"
-                className="min-h-[44px] touch-manipulation text-muted-foreground hover:text-foreground inline-flex items-center transition-colors"
-              >
-                ← Dashboard
-              </Link>
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-muted-foreground">
-                  {totalFixtures > 0 ? `${submittedCount}/${totalFixtures} submitted` : "—"}
-                </span>
-                {countdown != null && (
-                  <span className="flex items-center gap-1.5 text-sm font-mono text-foreground">
-                    <span className="text-muted-foreground" aria-hidden>🕐</span>
-                    {countdown}
-                  </span>
-                )}
-              </div>
-            </div>
+        <div className="mb-4">
+          <Link
+            href="/"
+            className="inline-flex min-h-[44px] touch-manipulation items-center text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            ← Dashboard
+          </Link>
+        </div>
 
-            <div className="mb-6 sm:mb-8">
+        <section className="mb-6 overflow-hidden rounded-2xl border border-border/70 bg-card/80 p-4 shadow-2xl shadow-primary/5 ring-1 ring-primary/10 backdrop-blur sm:mb-8 sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="mb-2 inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                Matchday Hub
+              </div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-primary max-sm:text-xl sm:text-2xl md:text-3xl">
-                  {gw != null ? `GW${gw}` : "…"} Matchday Predictions
+                <h1 className="text-2xl font-black tracking-tight text-foreground max-sm:text-2xl sm:text-3xl md:text-4xl">
+                  {gw != null ? `GW${gw}` : "…"} Predictions
                 </h1>
                 <button
                   type="button"
                   onClick={() => setScoringInfoPinned((p) => !p)}
                   onMouseEnter={() => { clearHoverLeave(); setScoringInfoHover(true); }}
                   onMouseLeave={scheduleHoverLeave}
-                  className="shrink-0 rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background"
+                  className="shrink-0 rounded-full border border-border/70 bg-background/60 p-2 text-muted-foreground shadow-sm transition hover:border-primary/40 hover:bg-primary/10 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background"
                   aria-label="How scoring works"
                   title="How scoring works"
                 >
                   <Info className="size-5" />
                 </button>
               </div>
-              {scoringInfoVisible && (
-                <div
-                  className="mt-2 w-full"
-                  onMouseEnter={() => { clearHoverLeave(); setScoringInfoHover(true); }}
-                  onMouseLeave={scheduleHoverLeave}
-                >
-                  <ScoringInfo />
-                </div>
-              )}
+              <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+                Lock in every scoreline before kickoff and track your matchday progress.
+              </p>
             </div>
+
+            <div className="grid grid-cols-2 gap-2 lg:min-w-[380px]">
+              <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-3 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Submitted
+                </p>
+                <p className="mt-1 text-xl font-bold text-foreground">
+                  {totalFixtures > 0 ? `${submittedCount}/${totalFixtures}` : "—"}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-3 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Countdown
+                </p>
+                <p className="mt-1 font-mono text-lg font-bold text-primary">
+                  {countdown ?? "—"}
+                </p>
+              </div>
+              <div className="col-span-2 rounded-xl border border-border/70 bg-background/55 px-3 py-3 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Next Kickoff
+                </p>
+                <p className="mt-1 text-sm font-semibold leading-snug text-foreground">
+                  {nextKickoffLabel ?? "Complete"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {totalFixtures > 0 && (
+            <div className="mt-5">
+              <div
+                className="h-2 overflow-hidden rounded-full bg-muted/70"
+                role="progressbar"
+                aria-valuenow={submittedCount}
+                aria-valuemin={0}
+                aria-valuemax={totalFixtures}
+              >
+                <div
+                  className="h-full rounded-full bg-primary shadow-[0_0_18px_var(--primary)] transition-all duration-500 motion-reduce:transition-none"
+                  style={{
+                    width: `${totalFixtures ? (100 * submittedCount) / totalFixtures : 0}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {scoringInfoVisible && (
+            <div
+              className="mt-4 w-full"
+              onMouseEnter={() => { clearHoverLeave(); setScoringInfoHover(true); }}
+              onMouseLeave={scheduleHoverLeave}
+            >
+              <ScoringInfo />
+            </div>
+          )}
+        </section>
 
         {!loading && !err && (
           <div className="mb-6">
@@ -492,11 +543,11 @@ export default function PlayPage() {
               const blockTotal = groupFixtures.length;
               return (
                 <section key={groupLabel}>
-                  <div className="mb-3 flex items-center justify-between">
-                    <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                  <div className="mb-3 flex items-center justify-between rounded-full border border-border/60 bg-card/50 px-3 py-2">
+                    <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                       {groupLabel}
                     </h2>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                       {blockSubmitted}/{blockTotal}
                     </span>
                   </div>
@@ -526,11 +577,11 @@ export default function PlayPage() {
             })}
 
             {finishedCount > 0 && (
-              <section className="border-t border-border pt-4">
+              <section className="rounded-2xl border border-border/70 bg-card/40 p-4">
                 <button
                   type="button"
                   onClick={() => setShowFinishedMatches((prev) => !prev)}
-                  className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+                  className="inline-flex min-h-[40px] items-center gap-2 rounded-full border border-border/60 bg-background/45 px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:border-primary/30 hover:text-foreground"
                 >
                   <span aria-hidden>{showFinishedMatches ? "▾" : "▸"}</span>
                   Finished matches ({finishedCount})
@@ -539,9 +590,11 @@ export default function PlayPage() {
                   <div className="mt-4 space-y-6">
                     {finishedGroups.map(([groupLabel, groupFixtures]) => (
                       <section key={`finished-${groupLabel}`}>
-                        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted-foreground">
-                          {groupLabel}
-                        </h2>
+                        <div className="mb-3 rounded-full border border-border/60 bg-background/45 px-3 py-2">
+                          <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                            {groupLabel}
+                          </h2>
+                        </div>
                         <div className="space-y-3">
                           {groupFixtures.map((f) => (
                             <div key={f.id} ref={(node) => setFixtureCardRef(f.id, node)}>
@@ -574,21 +627,21 @@ export default function PlayPage() {
 
         {/* Footer progress + Save All */}
         {!loading && !err && totalFixtures > 0 && (
-          <footer className="mt-8 border-t border-border pt-6">
+          <footer className="mt-8 rounded-2xl border border-border/70 bg-card/60 p-4 shadow-lg shadow-black/10">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm font-medium text-muted-foreground">
                   {submittedCount} of {totalFixtures} submitted
                 </span>
                 <div
-                  className="h-2 w-24 overflow-hidden rounded-full bg-muted"
+                  className="h-2 w-28 overflow-hidden rounded-full bg-muted"
                   role="progressbar"
                   aria-valuenow={submittedCount}
                   aria-valuemin={0}
                   aria-valuemax={totalFixtures}
                 >
                   <div
-                    className="h-full rounded-full bg-primary transition-all"
+                    className="h-full rounded-full bg-primary transition-all duration-500 motion-reduce:transition-none"
                     style={{
                       width: `${totalFixtures ? (100 * submittedCount) / totalFixtures : 0}%`,
                     }}
@@ -599,7 +652,7 @@ export default function PlayPage() {
                 <button
                   type="button"
                   onClick={saveAll}
-                  className="min-h-[44px] touch-manipulation rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+                  className="min-h-[44px] touch-manipulation rounded-xl bg-primary px-5 py-2 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20 transition hover:-translate-y-0.5 hover:opacity-95 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
                 >
                   Save All
                 </button>

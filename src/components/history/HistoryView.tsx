@@ -152,116 +152,128 @@ export function HistoryView({
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-3xl px-3 py-4 max-sm:px-3 max-sm:py-4 sm:px-4 sm:py-6 md:px-6">
-        <div className="mb-4 flex items-center gap-2 max-sm:mb-3 max-sm:gap-2 sm:mb-6 sm:gap-4">
-          <Link href={backHref} className="text-muted-foreground hover:text-foreground transition-colors max-sm:text-sm">
+      <div className="mx-auto max-w-4xl px-3 py-4 max-sm:px-3 max-sm:py-4 sm:px-4 sm:py-6 md:px-6">
+        <div className="mb-4">
+          <Link href={backHref} className="inline-flex min-h-[44px] items-center text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
             ← {backLabel}
           </Link>
-          <span className="text-muted-foreground">·</span>
-          <span className="font-semibold text-foreground max-sm:text-sm">Scoreline</span>
         </div>
 
-        <div className="mb-4 flex items-center gap-2 max-sm:mb-3 sm:mb-6">
-          <UserAvatar favouriteTeam={titleAvatarTeam} size={28} />
-          <h1 className="text-xl font-bold text-foreground max-sm:text-lg sm:text-2xl">{title}</h1>
-        </div>
-
-        <div className="flex flex-col gap-4 max-sm:gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-          <div>
-            <p className="text-3xl font-bold text-foreground max-sm:text-2xl sm:text-4xl">{totalPoints}</p>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide max-sm:text-xs sm:text-sm">Total pts</p>
-            {thisWeekPoints !== 0 && (
-              <p
-                className={`text-sm mt-1 ${
-                  thisWeekPoints > 0 ? "text-primary" : "text-destructive"
-                }`}
-              >
-                {thisWeekPoints > 0 ? "+" : ""}
-                {thisWeekPoints} this week
+        <section className="overflow-hidden rounded-2xl border border-border/70 bg-card/80 p-4 shadow-2xl shadow-primary/5 ring-1 ring-primary/10 backdrop-blur sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="mb-2 inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                History
+              </div>
+              <div className="flex items-center gap-3">
+                <UserAvatar favouriteTeam={titleAvatarTeam} size={34} />
+                <h1 className="text-2xl font-black tracking-tight text-foreground max-sm:text-2xl sm:text-3xl">
+                  {title}
+                </h1>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Review your scoreline record by gameweek, bonuses and Match of the Week picks.
               </p>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1.5 max-sm:gap-1.5 sm:gap-2">
-            <button
-              type="button"
-              onClick={prevGw}
-              disabled={gwNum <= 1}
-              className="h-9 w-9 rounded-lg border border-border bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:pointer-events-none max-sm:h-8 max-sm:w-8 sm:h-10 sm:w-10"
-              aria-label="Previous gameweek"
-            >
-              ←
-            </button>
-            <div className="flex items-center gap-1 rounded-lg border border-border bg-card px-2 py-1.5 max-sm:px-2 max-sm:py-1.5 sm:px-3 sm:py-2">
-              <span className="text-xs text-muted-foreground max-sm:text-xs sm:text-sm">GW</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={gwInput}
-                onChange={handleGwInputChange}
-                onBlur={syncGwInput}
-                className="w-8 bg-transparent text-center text-foreground font-semibold focus:outline-none focus:ring-0 max-sm:w-7 max-sm:text-sm sm:w-10 sm:text-base"
-                aria-label="Gameweek number"
-              />
-              <span className="text-xs text-muted-foreground max-sm:text-xs sm:text-sm">/ {maxGw}</span>
             </div>
-            <button
-              type="button"
-              onClick={nextGw}
-              disabled={gwNum >= maxGw}
-              className="h-9 w-9 rounded-lg border border-border bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:pointer-events-none max-sm:h-8 max-sm:w-8 sm:h-10 sm:w-10"
-              aria-label="Next gameweek"
-            >
-              →
-            </button>
-          </div>
-        </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 max-sm:mt-4 max-sm:gap-2 sm:mt-6 sm:grid-cols-4 sm:gap-3">
-          <div className="rounded-lg border border-border bg-card p-3 max-sm:p-3 sm:p-4">
-            <p className="text-xl font-bold text-primary max-sm:text-lg sm:text-2xl">{gameweekPoints}</p>
-            <p className="mt-0.5 text-[10px] text-muted-foreground uppercase tracking-wide max-sm:text-[10px] sm:text-xs">Points</p>
+            <div className="grid grid-cols-2 gap-2 lg:min-w-[360px]">
+              <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-3 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Total Points
+                </p>
+                <p className="mt-1 text-2xl font-black text-foreground">{totalPoints}</p>
+              </div>
+              <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-3 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  GW {gwNum}
+                </p>
+                <p className={`mt-1 text-2xl font-black ${thisWeekPoints < 0 ? "text-destructive" : "text-primary"}`}>
+                  {thisWeekPoints > 0 ? "+" : ""}
+                  {thisWeekPoints}
+                </p>
+              </div>
+              <div className="col-span-2 flex items-center justify-between gap-2 rounded-xl border border-border/70 bg-background/55 px-3 py-3 shadow-sm">
+                <button
+                  type="button"
+                  onClick={prevGw}
+                  disabled={gwNum <= 1}
+                  className="h-9 w-9 rounded-full border border-border bg-card text-foreground transition hover:border-primary/40 disabled:pointer-events-none disabled:opacity-40"
+                  aria-label="Previous gameweek"
+                >
+                  ←
+                </button>
+                <div className="flex items-center gap-1 rounded-lg border border-border/70 bg-card/70 px-3 py-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">GW</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={gwInput}
+                    onChange={handleGwInputChange}
+                    onBlur={syncGwInput}
+                    className="w-9 bg-transparent text-center font-bold text-foreground focus:outline-none focus:ring-0"
+                    aria-label="Gameweek number"
+                  />
+                  <span className="text-xs text-muted-foreground">/ {maxGw}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={nextGw}
+                  disabled={gwNum >= maxGw}
+                  className="h-9 w-9 rounded-full border border-border bg-card text-foreground transition hover:border-primary/40 disabled:pointer-events-none disabled:opacity-40"
+                  aria-label="Next gameweek"
+                >
+                  →
+                </button>
+              </div>
+            </div>
           </div>
-          <div className="rounded-lg border border-border bg-card p-3 max-sm:p-3 sm:p-4">
-            <p className="flex items-center gap-1 text-xl font-bold text-primary max-sm:text-lg sm:text-2xl">
+        </section>
+
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-4 sm:gap-3">
+          <div className="rounded-xl border border-border/70 bg-card/70 p-3 shadow-lg shadow-black/10 backdrop-blur sm:p-4">
+            <p className="text-xl font-black text-primary sm:text-2xl">{gameweekPoints}</p>
+            <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Points</p>
+          </div>
+          <div className="rounded-xl border border-border/70 bg-card/70 p-3 shadow-lg shadow-black/10 backdrop-blur sm:p-4">
+            <p className="flex items-center gap-1 text-xl font-black text-primary sm:text-2xl">
               <span aria-hidden>🎯</span> {exactCount}
             </p>
-            <p className="mt-0.5 text-[10px] text-muted-foreground uppercase tracking-wide max-sm:text-[10px] sm:text-xs">Exact</p>
+            <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Exact</p>
           </div>
-          <div className="rounded-lg border border-border bg-card p-3 max-sm:p-3 sm:p-4">
-            <p className="flex items-center gap-1 text-xl font-bold text-primary max-sm:text-lg sm:text-2xl">
+          <div className="rounded-xl border border-border/70 bg-card/70 p-3 shadow-lg shadow-black/10 backdrop-blur sm:p-4">
+            <p className="flex items-center gap-1 text-xl font-black text-primary sm:text-2xl">
               <span aria-hidden><FaCheck className="text-green-500 text-xxl" /></span> {correctCount}
             </p>
-            <p className="mt-0.5 text-[10px] text-muted-foreground uppercase tracking-wide max-sm:text-[10px] sm:text-xs">Correct</p>
+            <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Correct</p>
           </div>
-          <div className="rounded-lg border border-border bg-card p-3 max-sm:p-3 sm:p-4">
-            <p className="flex items-center gap-1 text-xl font-bold text-destructive max-sm:text-lg sm:text-2xl">
+          <div className="rounded-xl border border-border/70 bg-card/70 p-3 shadow-lg shadow-black/10 backdrop-blur sm:p-4">
+            <p className="flex items-center gap-1 text-xl font-black text-destructive sm:text-2xl">
               <span aria-hidden><FaXmark className="text-red-500 text-xxl" /></span> {wrongCount}
             </p>
-            <p className="mt-0.5 text-[10px] text-muted-foreground uppercase tracking-wide max-sm:text-[10px] sm:text-xs">Wrong</p>
+            <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Wrong</p>
           </div>
         </div>
         {pendingCount > 0 && (
-          <p className="mt-3 text-sm text-muted-foreground">
+          <p className="mt-3 rounded-xl border border-border/70 bg-card/60 px-3 py-2 text-sm text-muted-foreground">
             {pendingCount} fixture{pendingCount !== 1 ? "s are" : " is"} unscored and still settling. Scores are updated every 30 minutes.
           </p>
         )}
 
         {positionChange != null && positionChange !== 0 && (
-          <p className="mt-3 text-sm text-primary flex items-center gap-1">
+          <p className="mt-3 flex items-center gap-1 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
             <span aria-hidden>{positionChange > 0 ? "↑" : "↓"}</span>
             {positionChange > 0 ? "+" : ""}{positionChange} position
           </p>
         )}
 
         <div className="mt-6 max-sm:mt-4 sm:mt-8">
-          <div className="flex max-w-full w-fit flex-wrap gap-0.5 rounded-lg border border-border bg-muted/50 p-0.5">
+          <div className="flex max-w-full w-fit flex-wrap gap-1 rounded-xl border border-border/70 bg-card/70 p-1 shadow-lg shadow-black/10 backdrop-blur">
             <button
               type="button"
               onClick={() => setHistoryTab("matches")}
               className={`min-h-[36px] rounded-md px-3 text-sm font-medium transition-colors ${
                 historyTab === "matches"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-background/80 text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -272,7 +284,7 @@ export function HistoryView({
               onClick={() => setHistoryTab("bonuses")}
               className={`min-h-[36px] rounded-md px-3 text-sm font-medium transition-colors ${
                 historyTab === "bonuses"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-background/80 text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -288,7 +300,7 @@ export function HistoryView({
               onClick={() => setHistoryTab("gotw")}
               className={`inline-flex min-h-[36px] items-center gap-1 rounded-md px-3 text-sm font-medium transition-colors ${
                 historyTab === "gotw"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-background/80 text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -299,9 +311,9 @@ export function HistoryView({
 
         {historyTab === "matches" && (
         <section className="mt-4">
-          <h2 className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-foreground max-sm:text-xs sm:text-sm">
+          <h2 className="flex items-center justify-between rounded-full border border-border/60 bg-card/50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             <span>Fixtures</span>
-            <span className="font-normal text-muted-foreground max-sm:text-xs sm:text-sm">
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
               {predictionsForGw.length} fixture{predictionsForGw.length !== 1 ? "s" : ""}
             </span>
           </h2>
@@ -328,11 +340,12 @@ export function HistoryView({
               return (
                 <li key={p.prediction_id}>
                   <div
-                    className={`rounded-lg border border-border bg-card p-3 pl-4 border-l-4 text-center max-sm:p-3 max-sm:pl-4 sm:p-4 sm:pl-5 ${borderColor}`}
+                    className={`relative overflow-hidden rounded-2xl border border-border/80 bg-card/85 p-3 pl-4 border-l-4 text-center shadow-xl shadow-black/15 ring-1 ring-primary/5 sm:p-4 sm:pl-5 ${borderColor}`}
                   >
+                    <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
                     {p.fixture ? (
                       <>
-                        <div className="flex flex-wrap items-center justify-center gap-1.5 max-sm:gap-1.5 sm:gap-3">
+                        <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-border/70 bg-background/50 p-3 shadow-inner shadow-black/10 sm:gap-3">
                           <div className="flex items-center gap-1 max-sm:gap-1 sm:gap-2">
                             <TeamLogo teamName={p.fixture.home_team} size={28} />
                             <span className="font-semibold text-foreground max-sm:text-xs sm:text-sm">
@@ -340,7 +353,7 @@ export function HistoryView({
                             </span>
                           </div>
                           {p.fixture.home_goals != null && p.fixture.away_goals != null ? (
-                            <span className="font-bold text-foreground max-sm:text-sm sm:text-base">
+                            <span className="rounded-xl border border-primary/35 bg-card px-3 py-1 text-sm font-black tabular-nums text-foreground shadow-lg shadow-primary/10 sm:text-base">
                               {p.fixture.home_goals} – {p.fixture.away_goals}
                             </span>
                           ) : (
@@ -352,14 +365,14 @@ export function HistoryView({
                               {p.fixture.away_team}
                             </span>
                           </div>
-                          <span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${
+                          <span className={`rounded-full border px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${
                             type === "hidden"
-                              ? "bg-muted text-muted-foreground"
+                              ? "border-border bg-muted/40 text-muted-foreground"
                               : type === "wrong"
-                                ? "bg-destructive/20 text-destructive"
+                                ? "border-destructive/40 bg-destructive/15 text-destructive"
                                 : type === "pending"
-                                  ? "bg-muted text-muted-foreground"
-                                  : "bg-primary/20 text-primary"
+                                  ? "border-border bg-muted/40 text-muted-foreground"
+                                  : "border-primary/40 bg-primary/15 text-primary"
                           }`}>
                             {type === "hidden"
                               ? "Hidden"
@@ -370,7 +383,7 @@ export function HistoryView({
                                   : `+${pts}`}
                           </span>
                         </div>
-                        <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 border-t border-border pt-2 max-sm:mt-2 max-sm:gap-1.5 max-sm:pt-2 sm:mt-3 sm:gap-2 sm:pt-3">
+                        <div className="mt-3 flex flex-wrap items-center justify-center gap-2 rounded-xl border border-border/60 bg-background/45 px-3 py-2">
                           {type === "hidden" ? (
                             <span className="text-sm text-muted-foreground">
                               Prediction hidden until odds lock or kickoff (this user keeps picks private before then).
@@ -414,7 +427,9 @@ export function HistoryView({
                             />
                           </div>
                         )}
-                        <FixtureCommunityStats fixtureId={p.fixture_id} enabled={hasFinalScore} />
+                        <div className="mt-3 border-t border-border/60 pt-3">
+                          <FixtureCommunityStats fixtureId={p.fixture_id} enabled={hasFinalScore} />
+                        </div>
                       </>
                     ) : (
                       <span className="text-muted-foreground">Fixture {p.fixture_id}</span>
@@ -426,7 +441,7 @@ export function HistoryView({
           </ul>
 
           {exactCount >= 4 && predictionsForGw.length > 0 && (
-            <div className="mt-4 rounded-lg bg-primary/15 border border-primary/30 px-4 py-3 text-primary text-sm font-medium">
+            <div className="mt-4 rounded-xl bg-primary/15 border border-primary/30 px-4 py-3 text-primary text-sm font-medium">
               {exactCount} exact score{exactCount !== 1 ? "s" : ""} in Gameweek {selectedGameweek}, outstanding performance!
             </div>
           )}
@@ -443,11 +458,11 @@ export function HistoryView({
 
         {historyTab === "bonuses" && (
           <section className="mt-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground max-sm:text-xs sm:text-sm">
+            <h2 className="rounded-full border border-border/60 bg-card/50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Gameweek {selectedGameweek} bonuses
             </h2>
             {bonusesForGw.length === 0 ? (
-              <p className="mt-3 text-sm text-muted-foreground">
+              <p className="mt-3 rounded-2xl border border-border/70 bg-card/70 p-4 text-sm text-muted-foreground shadow-lg shadow-black/10 backdrop-blur">
                 No bonuses earned for this gameweek. Bonuses are applied after the gameweek is settled.
               </p>
             ) : (
@@ -455,7 +470,7 @@ export function HistoryView({
                 {bonusesForGw.map((b, i) => (
                   <li
                     key={`${b.bonus_type}-${i}`}
-                    className="rounded-lg border border-border bg-card p-3 pl-4 border-l-4 border-l-primary"
+                    className="rounded-2xl border border-border/80 bg-card/85 p-3 pl-4 border-l-4 border-l-primary shadow-xl shadow-black/15 ring-1 ring-primary/5"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-sm font-medium text-foreground">
@@ -474,10 +489,10 @@ export function HistoryView({
 
         {historyTab === "gotw" && (
           <section className="mt-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground max-sm:text-xs sm:text-sm">
+            <h2 className="rounded-full border border-border/60 bg-card/50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Match of the week
             </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="mt-3 rounded-2xl border border-border/70 bg-card/70 p-4 text-sm text-muted-foreground shadow-lg shadow-black/10 backdrop-blur">
               Community pick per gameweek (votes close 24h before the first kickoff). Correct predictions on the winning
               match earn +15 pts when the gameweek is scored.
             </p>
@@ -486,7 +501,7 @@ export function HistoryView({
               <p className="mt-3 text-sm text-muted-foreground">Loading match-of-the-week history…</p>
             )}
             {!gotwLoading && !gotwError && gotwEntries.length === 0 && (
-              <p className="mt-3 text-sm text-muted-foreground">No fixtures for this season yet.</p>
+              <p className="mt-3 rounded-2xl border border-border/70 bg-card/70 p-4 text-sm text-muted-foreground shadow-lg shadow-black/10 backdrop-blur">No fixtures for this season yet.</p>
             )}
             {!gotwLoading && !gotwError && gotwEntries.length > 0 && (
               <ul className="mt-4 list-none space-y-2 p-0 m-0">
@@ -510,14 +525,14 @@ export function HistoryView({
                   return (
                     <li
                       key={row.gameweek}
-                      className={`rounded-lg border border-border bg-card p-3 sm:p-4 ${
+                      className={`rounded-2xl border border-border/80 bg-card/85 p-3 shadow-xl shadow-black/15 ring-1 ring-primary/5 sm:p-4 ${
                         isSelectedGw ? "ring-2 ring-primary/40" : ""
                       }`}
                     >
-                      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-2 text-sm font-semibold text-foreground">
+                      <div className="flex flex-wrap items-center gap-2 border-b border-border/60 pb-2 text-sm font-semibold text-foreground">
                         <span>GW{row.gameweek}</span>
                         {isSelectedGw && (
-                          <span className="rounded-md bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary">
+                          <span className="rounded-full border border-primary/40 bg-primary/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">
                             Selected above
                           </span>
                         )}

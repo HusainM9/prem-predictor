@@ -87,10 +87,10 @@ function formatShortDate(iso: string): string {
   });
 }
 
-function formDotClass(result: "W" | "D" | "L"): string {
-  if (result === "W") return "bg-emerald-500";
-  if (result === "L") return "bg-red-500";
-  return "bg-muted-foreground/60";
+function formChipClass(result: "W" | "D" | "L"): string {
+  if (result === "W") return "border-emerald-400/40 bg-emerald-500/15 text-emerald-300";
+  if (result === "L") return "border-red-400/40 bg-red-500/15 text-red-300";
+  return "border-border bg-muted/40 text-muted-foreground";
 }
 
 function dateKey(iso: string): string {
@@ -242,54 +242,66 @@ export default function MatchesPage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-3xl px-3 py-4 max-sm:px-3 max-sm:py-4 sm:px-4 sm:py-6">
-        <div className="mb-4 flex items-center gap-2 max-sm:mb-4 max-sm:gap-2 sm:mb-6 sm:gap-4">
-          <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors max-sm:text-sm">
+      <div className="mx-auto max-w-4xl px-3 py-4 max-sm:px-3 max-sm:py-4 sm:px-4 sm:py-6">
+        <div className="mb-4">
+          <Link href="/" className="inline-flex min-h-[44px] items-center text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
             ← Back
           </Link>
-          <span className="text-muted-foreground">·</span>
-          <span className="font-semibold text-foreground max-sm:text-sm">Scoreline</span>
         </div>
 
-        <div className="mb-4 flex flex-col gap-1.5 max-sm:mb-4 sm:mb-6 sm:gap-2">
-          <div className="flex items-center gap-1.5 max-sm:gap-1.5 sm:gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 shrink-0 max-sm:h-8 max-sm:w-8 sm:h-9 sm:w-9"
-              disabled={!canGoPrev}
-              onClick={() => load(false, (gw ?? minGw) - 1)}
-              aria-label="Previous gameweek"
-            >
-              <ChevronLeft className="size-4 max-sm:size-3.5" />
-            </Button>
-            <h1 className="text-xl font-bold text-foreground max-sm:text-lg sm:text-2xl">Matches</h1>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 shrink-0 max-sm:h-8 max-sm:w-8 sm:h-9 sm:w-9"
-              disabled={!canGoNext}
-              onClick={() => load(false, (gw ?? currentGw ?? 1) + 1)}
-              aria-label="Next gameweek"
-            >
-              <ChevronRight className="size-4 max-sm:size-3.5" />
-            </Button>
+        <section className="mb-6 overflow-hidden rounded-2xl border border-border/70 bg-card/80 p-4 shadow-2xl shadow-primary/5 ring-1 ring-primary/10 backdrop-blur sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="mb-2 inline-flex rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                Fixtures
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0 rounded-full bg-background/55"
+                  disabled={!canGoPrev}
+                  onClick={() => load(false, (gw ?? minGw) - 1)}
+                  aria-label="Previous gameweek"
+                >
+                  <ChevronLeft className="size-4" />
+                </Button>
+                <h1 className="text-2xl font-black tracking-tight text-foreground sm:text-3xl">
+                  GW {gw ?? "…"} Matches
+                </h1>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0 rounded-full bg-background/55"
+                  disabled={!canGoNext}
+                  onClick={() => load(false, (gw ?? currentGw ?? 1) + 1)}
+                  aria-label="Next gameweek"
+                >
+                  <ChevronRight className="size-4" />
+                </Button>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Live scores, form guide and fan reactions for each fixture.
+              </p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-3 shadow-sm">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Updated
+              </p>
+              <p className="mt-1 text-sm font-semibold text-foreground">
+                {lastUpdated
+                  ? lastUpdated.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+                  : "—"}
+                {refreshing && " updating…"}
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground max-sm:text-xs sm:text-sm">
-            Gameweek {gw ?? "…"}
-            {gw !== null && currentGw !== null && gw !== currentGw && (
-              <span className="ml-1.5 sm:ml-2 text-[10px] sm:text-xs">
-                ({gw < currentGw ? `viewing past` : `viewing future`} · current is GW {currentGw})
-              </span>
-            )}
-            {lastUpdated && (
-              <span className="ml-1.5 sm:ml-2">
-                · Updated {lastUpdated.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                {refreshing && " (updating…)"}
-              </span>
-            )}
-          </p>
-        </div>
+          {gw !== null && currentGw !== null && gw !== currentGw && (
+            <p className="mt-4 text-xs text-muted-foreground">
+              Viewing {gw < currentGw ? "past" : "future"} fixtures. Current gameweek is GW {currentGw}.
+            </p>
+          )}
+        </section>
 
         {fixtures.length === 0 ? (
           <p className="text-muted-foreground max-sm:text-sm">No matches for this gameweek.</p>
@@ -297,9 +309,11 @@ export default function MatchesPage() {
           <div className="space-y-4 max-sm:space-y-4 sm:space-y-8">
             {byDate.map(({ dateKey: key, dateLabel, list }) => (
               <section key={key}>
-                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground max-sm:mb-2 max-sm:text-xs sm:mb-3 sm:text-sm">
-                  {dateLabel}
-                </h2>
+                <div className="mb-3 rounded-full border border-border/60 bg-card/50 px-3 py-2">
+                  <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    {dateLabel}
+                  </h2>
+                </div>
                 <div className="space-y-3">
                   {list.map((f) => {
                     const live = isLive(f);
@@ -311,40 +325,43 @@ export default function MatchesPage() {
                     return (
                       <article
                         key={f.id}
-                        className={`rounded-lg border border-border bg-card p-4 ${
-                          live ? "ring-1 ring-primary/35" : ""
+                        className={`relative overflow-hidden rounded-2xl border border-border/80 bg-card/85 p-4 shadow-xl shadow-black/15 ring-1 ring-primary/5 ${
+                          live ? "border-primary/40 ring-primary/35" : ""
                         }`}
                       >
-                        <div className="mb-3 flex items-center justify-between gap-2">
-                          <div className="text-xs text-muted-foreground">
+                        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
+                        <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-border/60 bg-background/45 px-3 py-2">
+                          <div className="text-xs font-semibold text-muted-foreground">
                             {formatTime(f.kickoff_time)}
                           </div>
-                          <div className={live ? "text-xs font-medium text-primary" : "text-xs text-muted-foreground"}>
+                          <div className={live ? "rounded-full border border-primary/40 bg-primary/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-primary" : "rounded-full border border-border bg-muted/30 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground"}>
                             {f.is_stuck && !hasScore(f) ? "Awaiting result" : displayStatus(f)}
                           </div>
                         </div>
 
-                        <div className="mb-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                          <TeamDisplay teamName={f.home_team} size={28} align="end" />
-                          <div className="rounded-md border border-border bg-muted/30 px-3 py-1 text-sm font-bold text-foreground">
+                        <div className="mb-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-2xl border border-border/70 bg-background/50 p-3 shadow-inner shadow-black/10">
+                          <TeamDisplay teamName={f.home_team} size={34} align="end" />
+                          <div className="rounded-xl border border-primary/45 bg-card px-4 py-2 text-base font-black tabular-nums text-foreground shadow-lg shadow-primary/10">
                             {scoreText}
                           </div>
-                          <TeamDisplay teamName={f.away_team} size={28} align="start" />
+                          <TeamDisplay teamName={f.away_team} size={34} align="start" />
                         </div>
 
                         <div className="mb-3 grid grid-cols-2 gap-3">
-                          <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                            <p className="font-medium text-foreground/90">{homeForm.team} form</p>
-                            <div className="mt-2 flex items-center gap-1.5">
+                          <div className="rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5 text-xs text-muted-foreground">
+                            <p className="font-semibold text-foreground/90">{homeForm.team} form</p>
+                            <div className="mt-2 flex items-center gap-1">
                               {homeForm.last_five.length === 0 ? (
                                 <span className="text-[11px] text-muted-foreground">No recent matches</span>
                               ) : (
                                 homeForm.last_five.map((m, idx) => (
                                   <span
                                     key={`${f.id}-home-form-dot-${idx}`}
-                                    className={`inline-block h-2.5 w-2.5 rounded-full ${formDotClass(m.result)}`}
+                                    className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md border px-1 text-[10px] font-bold ${formChipClass(m.result)}`}
                                     title={`${m.result}: ${m.team} ${m.goals_for}-${m.goals_against} ${m.opponent}`}
-                                  />
+                                  >
+                                    {m.result}
+                                  </span>
                                 ))
                               )}
                             </div>
@@ -363,18 +380,20 @@ export default function MatchesPage() {
                               </details>
                             )}
                           </div>
-                          <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground text-right">
-                            <p className="font-medium text-foreground/90">{awayForm.team} form</p>
-                            <div className="mt-2 flex items-center justify-end gap-1.5">
+                          <div className="rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5 text-xs text-muted-foreground text-right">
+                            <p className="font-semibold text-foreground/90">{awayForm.team} form</p>
+                            <div className="mt-2 flex items-center justify-end gap-1">
                               {awayForm.last_five.length === 0 ? (
                                 <span className="text-[11px] text-muted-foreground">No recent matches</span>
                               ) : (
                                 awayForm.last_five.map((m, idx) => (
                                   <span
                                     key={`${f.id}-away-form-dot-${idx}`}
-                                    className={`inline-block h-2.5 w-2.5 rounded-full ${formDotClass(m.result)}`}
+                                    className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md border px-1 text-[10px] font-bold ${formChipClass(m.result)}`}
                                     title={`${m.result}: ${m.team} ${m.goals_for}-${m.goals_against} ${m.opponent}`}
-                                  />
+                                  >
+                                    {m.result}
+                                  </span>
                                 ))
                               )}
                             </div>

@@ -1,11 +1,5 @@
-/**
- * Dark design presets — toggled via `data-design` on <html> (see DesignPresetSwitcher).
- * PL ribbon PNG (blue) in /public/backgrounds (ensure you have rights if you ship publicly).
- */
 
-/* ---- Token sets ---- */
-html.dark[data-design="emerald"],
-html.dark:not([data-design]) {
+html.dark[data-design="emerald"] {
   --background: oklch(0.1 0.005 260);
   --foreground: oklch(0.95 0 0);
   --card: oklch(0.155 0.005 260);
@@ -45,47 +39,8 @@ html.dark:not([data-design]) {
   --warning: oklch(0.8 0.18 85);
 }
 
-html.dark[data-design="pl-ribbons-blue"] {
-  --background: oklch(0.09 0.05 308);
-  --foreground: oklch(0.97 0.01 305);
-  --card: oklch(0.15 0.065 305);
-  --card-foreground: oklch(0.97 0.01 305);
-  --popover: oklch(0.15 0.065 305);
-  --popover-foreground: oklch(0.97 0.01 305);
-  --primary: oklch(0.72 0.11 255);
-  --primary-foreground: oklch(0.1 0.04 310);
-  --secondary: oklch(0.2 0.05 302);
-  --secondary-foreground: oklch(0.94 0.02 305);
-  --muted: oklch(0.2 0.045 302);
-  --muted-foreground: oklch(0.66 0.04 285);
-  --accent: oklch(0.7 0.1 235);
-  --accent-foreground: oklch(0.1 0.04 310);
-  --destructive: oklch(0.6 0.22 25);
-  --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.3 0.07 305);
-  --input: oklch(0.26 0.06 302);
-  --ring: oklch(0.72 0.11 255);
-  --chart-1: oklch(0.72 0.11 255);
-  --chart-2: oklch(0.65 0.1 285);
-  --chart-3: oklch(0.55 0.12 330);
-  --chart-4: oklch(0.78 0.14 85);
-  --chart-5: oklch(0.72 0.16 155);
-  --sidebar: oklch(0.1 0.05 310);
-  --sidebar-foreground: oklch(0.96 0.01 305);
-  --sidebar-primary: oklch(0.72 0.11 255);
-  --sidebar-primary-foreground: oklch(0.1 0.04 310);
-  --sidebar-accent: oklch(0.2 0.05 300);
-  --sidebar-accent-foreground: oklch(0.95 0.01 305);
-  --sidebar-border: oklch(0.28 0.07 305);
-  --sidebar-ring: oklch(0.72 0.11 255);
-  --surface: oklch(0.12 0.055 306);
-  --surface-foreground: oklch(0.94 0.02 305);
-  --positive: oklch(0.76 0.16 155);
-  --negative: oklch(0.66 0.2 25);
-  --warning: oklch(0.85 0.15 85);
-}
-
-html.dark[data-design="aurora"] {
+html.dark[data-design="aurora"],
+html.dark:not([data-design]) {
   --background: oklch(0.1 0.055 300);
   --foreground: oklch(0.97 0.02 300);
   --card: oklch(0.15 0.06 298);
@@ -125,9 +80,7 @@ html.dark[data-design="aurora"] {
   --warning: oklch(0.85 0.15 85);
 }
 
-/* ---- Body backdrops (CSS-only) ---- */
-html.dark[data-design="emerald"] body,
-html.dark:not([data-design]) body {
+html.dark[data-design="emerald"] body {
   background-color: var(--background);
   background-image:
     radial-gradient(ellipse 110% 60% at 50% -12%, oklch(0.22 0.09 160 / 0.32), transparent 52%),
@@ -135,20 +88,10 @@ html.dark:not([data-design]) body {
   background-attachment: fixed;
 }
 
-html.dark[data-design="pl-ribbons-blue"] body,
-html.dark[data-design="aurora"] body {
+html.dark[data-design="aurora"] body,
+html.dark:not([data-design]) body {
   background-color: transparent;
   background-image: none;
-}
-
-/* ---- Raster / animated underlay (fixed) ---- */
-@keyframes design-pl-pan {
-  0% {
-    transform: scale(1.04) translate(-1.2%, -0.8%);
-  }
-  100% {
-    transform: scale(1.12) translate(1.2%, 0.8%);
-  }
 }
 
 @keyframes design-aurora-shift {
@@ -166,30 +109,8 @@ html.dark[data-design="aurora"] body {
   }
 }
 
-html.dark[data-design="pl-ribbons-blue"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-color: var(--background);
-  background-repeat: no-repeat, no-repeat;
-  background-size: auto, cover;
-  background-position: center, center;
-  transform: scale(1.06);
-  transform-origin: center center;
-  animation: design-pl-pan 75s ease-in-out infinite alternate;
-  background-image:
-    linear-gradient(
-      to bottom,
-      oklch(0.06 0.045 310 / 0.94) 0%,
-      oklch(0.07 0.048 310 / 0.72) 38%,
-      oklch(0.08 0.05 308 / 0.9) 100%
-    ),
-    url("/backgrounds/pl-ribbons-blue.png");
-}
-
-html.dark[data-design="aurora"]::before {
+html.dark[data-design="aurora"]::before,
+html.dark:not([data-design])::before {
   content: "";
   position: fixed;
   inset: 0;
@@ -206,11 +127,8 @@ html.dark[data-design="aurora"]::before {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html.dark[data-design="pl-ribbons-blue"]::before {
-    animation: none;
-    transform: none;
-  }
-  html.dark[data-design="aurora"]::before {
+  html.dark[data-design="aurora"]::before,
+  html.dark:not([data-design])::before {
     animation: none;
     filter: none;
     transform: none;

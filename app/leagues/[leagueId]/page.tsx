@@ -9,7 +9,6 @@ import { ChatPanel } from "@/components/chat/ChatPanel";
 
 const PAGE_SIZE = 50;
 
-/** Same ID as server `GLOBAL_LEAGUE_ID` / `NEXT_PUBLIC_GLOBAL_LEAGUE_ID` — league page chat would duplicate the app-wide Global chat. */
 const GLOBAL_LEAGUE_ID_CLIENT = process.env.NEXT_PUBLIC_GLOBAL_LEAGUE_ID?.trim() ?? null;
 
 function getLeagueInitials(name: string): string {
@@ -176,11 +175,11 @@ export default function LeagueDetailPage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6">
-        <div className="mb-6">
+      <div className="mx-auto max-w-4xl px-3 py-4 sm:px-4 sm:py-6">
+        <div className="mb-4">
           <Link
             href="/leagues"
-            className="text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex min-h-[44px] items-center text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             ← All leagues
           </Link>
@@ -191,70 +190,77 @@ export default function LeagueDetailPage() {
 
         {!loading && !err && leagueName && (
           <>
-            {/* League info card */}
-            <section className="rounded-lg border border-border bg-card p-5 mb-8">
-              <div className="flex items-start gap-4 mb-6">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xl font-bold">
-                  {getLeagueInitials(leagueName)}
+            <section className="mb-6 overflow-hidden rounded-2xl border border-border/70 bg-card/80 p-4 shadow-2xl shadow-primary/5 ring-1 ring-primary/10 backdrop-blur sm:p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <div className="mb-2 inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                    League Hub
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-primary/30 bg-primary/15 text-2xl font-black text-primary shadow-lg shadow-primary/10">
+                      {getLeagueInitials(leagueName)}
+                    </div>
+                    <div className="min-w-0">
+                      <h1 className="truncate text-2xl font-black tracking-tight text-foreground sm:text-3xl">
+                        {leagueName}
+                      </h1>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {memberCount} {memberCount === 1 ? "member" : "members"} competing this season
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <h1 className="text-xl font-bold text-foreground">{leagueName}</h1>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    {memberCount} {memberCount === 1 ? "member" : "members"}
-                  </p>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-                    Your rank
-                  </p>
-                  <p className="text-lg font-bold text-foreground flex items-center gap-1.5">
-                    {myRank != null ? `#${myRank}` : "—"}
-                    {rankChange != null && rankChange !== 0 && (
-                      <span
-                        className={rankChange > 0 ? "text-primary text-sm font-normal" : "text-destructive text-sm font-normal"}
-                        title={rankChange > 0 ? "Up from last gameweek" : "Down from last gameweek"}
-                      >
-                        {rankChange > 0 ? "↑" : "↓"} {Math.abs(rankChange)}
-                      </span>
-                    )}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-                    Points
-                  </p>
-                  <p className="text-lg font-bold text-foreground">
-                    {myPoints != null ? myPoints : "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-                    Gap to 1st
-                  </p>
-                  <p className="text-lg font-bold text-warning">
-                    {gapToFirst != null ? gapToFirst : "—"}
-                  </p>
+                <div className="grid grid-cols-3 gap-2 lg:min-w-[360px]">
+                  <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-3 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Rank
+                    </p>
+                    <p className="mt-1 flex items-center gap-1.5 text-xl font-black text-foreground">
+                      {myRank != null ? `#${myRank}` : "—"}
+                      {rankChange != null && rankChange !== 0 && (
+                        <span
+                          className={rankChange > 0 ? "text-sm font-semibold text-primary" : "text-sm font-semibold text-destructive"}
+                          title={rankChange > 0 ? "Up from last gameweek" : "Down from last gameweek"}
+                        >
+                          {rankChange > 0 ? "↑" : "↓"} {Math.abs(rankChange)}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-3 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Points
+                    </p>
+                    <p className="mt-1 text-xl font-black text-foreground">
+                      {myPoints != null ? myPoints : "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-3 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      To 1st
+                    </p>
+                    <p className="mt-1 text-xl font-black text-warning">
+                      {gapToFirst != null ? gapToFirst : "—"}
+                    </p>
+                  </div>
                 </div>
               </div>
 
               {inviteCode && (
-                <div className="mb-6">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+                <div className="mt-5 rounded-2xl border border-border/70 bg-background/45 p-3">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     Invite code
                   </p>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 rounded-lg border border-border bg-muted/30 px-3 py-2 font-mono text-foreground tracking-widest">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <div className="flex-1 rounded-xl border border-border/70 bg-card/70 px-3 py-2 font-mono text-sm tracking-widest text-foreground">
                       {inviteCode}
                     </div>
                     <button
                       type="button"
                       onClick={copyInviteCode}
-                      className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                      className="min-h-[40px] rounded-xl border border-border bg-card/70 px-4 py-2 text-sm font-semibold text-foreground transition hover:border-primary/40 hover:bg-primary/10"
                     >
-                      <span aria-hidden>📋</span>
                       {copyDone ? "Copied!" : "Copy"}
                     </button>
                   </div>
@@ -263,7 +269,7 @@ export default function LeagueDetailPage() {
             </section>
 
             {leaderboardErr && (
-              <p className="text-destructive text-sm mb-3">{leaderboardErr}</p>
+              <p className="mb-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{leaderboardErr}</p>
             )}
 
             {/* Leaderboard table */}
@@ -276,12 +282,12 @@ export default function LeagueDetailPage() {
               />
             </div>
             {!loadingLeaderboard && totalCount > PAGE_SIZE && (
-              <p className="text-sm text-muted-foreground mt-2">
+              <p className="mt-3 rounded-xl border border-border/70 bg-card/60 px-3 py-2 text-sm text-muted-foreground">
                 Showing top {PAGE_SIZE} of {totalCount}. Use the main Leaderboard page to search or filter by gameweek.
               </p>
             )}
             {!loadingLeaderboard && isAppGlobalLeague && (
-              <p className="mt-8 text-sm text-muted-foreground">
+              <p className="mt-8 rounded-2xl border border-border/70 bg-card/70 p-4 text-sm text-muted-foreground shadow-lg shadow-black/10 backdrop-blur">
                 League chat is not shown here use{" "}
                 <span className="font-medium text-foreground">Global chat</span> accessed from the bottom right of the screen.
               </p>

@@ -38,7 +38,6 @@ export default function HistoryPage() {
         }
         const headers = { Authorization: `Bearer ${session.access_token}` };
 
-        // Load prediction history first so core page controls are usable even if GOTW fails/slows.
         try {
           const predRes = await fetch("/api/predictions/history", { headers });
           const data = await predRes.json();
@@ -51,8 +50,8 @@ export default function HistoryPage() {
             setByGameweek(byGw);
             const cgw = data.current_gameweek ?? null;
             setCurrentGameweek(cgw);
-            if (cgw != null && selectedGameweek === 1) {
-              setSelectedGameweek(cgw);
+            if (cgw != null) {
+              setSelectedGameweek((prev) => (prev === 1 ? cgw : prev));
             }
             setTotalPoints(sumTotalPointsFromByGameweek(byGw));
           }
@@ -65,7 +64,6 @@ export default function HistoryPage() {
           if (!cancelled) setLoading(false);
         }
 
-        // GOTW is secondary; load independently so it cannot block the whole page.
         try {
           const gotwRes = await fetch("/api/game-of-the-week/history", { headers });
           if (gotwRes.ok) {

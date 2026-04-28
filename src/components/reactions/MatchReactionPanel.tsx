@@ -22,6 +22,7 @@ export function MatchReactionPanel({
 }: MatchReactionPanelProps) {
   const [openPicker, setOpenPicker] = useState(false);
   const [sectionIdx, setSectionIdx] = useState(0);
+  const [pickerPosition, setPickerPosition] = useState<{ left: number; top: number } | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const pickerHostRef = useRef<HTMLDivElement | null>(null);
   const safeSummary: ReactionSummary = summary ?? { counts: {}, total: 0, myEmoji: null };
@@ -42,14 +43,40 @@ export function MatchReactionPanel({
   const sections = [topFive, topTwenty] as const;
   const displayed = sections[sectionIdx] ?? topFive;
 
+  const togglePicker = () => {
+    if (disabled || pending) return;
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const width = Math.min(352, window.innerWidth - 16);
+      setPickerPosition({
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+        top: Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - 432)),
+      });
+    }
+    setOpenPicker((v) => !v);
+  };
+
   useEffect(() => {
     if (!openPicker) return;
     const onPointerDown = (e: MouseEvent) => {
       if (!containerRef.current) return;
-      if (!containerRef.current.contains(e.target as Node)) setOpenPicker(false);
+      const target = e.target as Node;
+      if (
+        !containerRef.current.contains(target) &&
+        !pickerHostRef.current?.contains(target)
+      ) {
+        setOpenPicker(false);
+      }
     };
+    const onReposition = () => setOpenPicker(false);
     document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
   }, [openPicker]);
 
   useEffect(() => {
@@ -100,7 +127,7 @@ export function MatchReactionPanel({
         </div>
         <button
           type="button"
-          onClick={() => setOpenPicker((v) => !v)}
+          onClick={togglePicker}
           disabled={disabled || pending}
           className={cn(
             "rounded-full border border-dashed border-border bg-muted/20 px-2 py-1 text-xs text-muted-foreground hover:bg-muted/60",
@@ -142,7 +169,15 @@ export function MatchReactionPanel({
       )}
 
       {openPicker && (
-        <div className="absolute left-0 top-[calc(100%+0.35rem)] z-20 overflow-hidden rounded-lg border border-border bg-card shadow-lg">
+        <div
+          className="fixed z-[100] overflow-hidden rounded-lg border border-border bg-card shadow-2xl"
+          style={{
+            left: pickerPosition?.left ?? 8,
+            top: pickerPosition?.top ?? 8,
+            maxWidth: "calc(100vw - 1rem)",
+            maxHeight: "min(420px, calc(100vh - 1rem))",
+          }}
+        >
           <div ref={pickerHostRef} />
         </div>
       )}

@@ -176,157 +176,156 @@ function LeaderboardContent() {
   const isCurrentGwView = effectiveGameweek != null && currentGameweek != null && effectiveGameweek === currentGameweek;
 
   return (
-    <main className="mx-auto max-w-[640px] p-6 max-sm:px-3 max-sm:py-4 sm:p-6">
-      <div style={{ marginBottom: 16 }}>
-        <Link href="/" style={{ opacity: 0.9 }}>
-          ← Dashboard
-        </Link>
-      </div>
-
-      {currentUserId && myEntry && totalCount > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <p style={{ fontSize: 28, fontWeight: 700, marginBottom: 4 }}>
-            You are <span style={{ color: "var(--primary, #22c55e)" }}>#{myEntry.rank}</span> of {totalCount}
-          </p>
-          <p style={{ fontSize: 14, opacity: 0.8 }}>{subtitle}</p>
-        </div>
-      )}
-      {!currentUserId && totalCount > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <p style={{ fontSize: 14, opacity: 0.8, marginBottom: 4 }}>{standingsLabel}</p>
-          <p style={{ fontSize: 14 }}>
-            <Link href="/login" style={{ color: "var(--primary, #22c55e)", fontWeight: 500 }}>
-              Log in to see your rank
-            </Link>
-          </p>
-        </div>
-      )}
-
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ opacity: 0.9, fontSize: 24 }} aria-hidden>🏆</span>
-          <Select
-            value={leagueId ?? "__global__"}
-            onValueChange={(v) => setLeague(v === "__global__" ? null : v)}
+    <main className="min-h-screen text-foreground">
+      <div className="mx-auto max-w-4xl px-3 py-4 sm:px-4 sm:py-6">
+        <div className="mb-4">
+          <Link
+            href="/"
+            className="inline-flex min-h-[44px] items-center text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
-            <SelectTrigger className="min-w-[180px]">
-              <SelectValue placeholder="Global league" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__global__">Global league</SelectItem>
-              {leagues.map((l) => (
-                <SelectItem key={l.id} value={l.id}>
-                  {l.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            ← Dashboard
+          </Link>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 14, opacity: 0.9 }}>Per gameweek</span>
-          <Select
-            value={effectiveGameweek != null ? String(effectiveGameweek) : "__all__"}
-            onValueChange={(v) => setGameweek(v === "__all__" ? null : Number(v))}
-          >
-            <SelectTrigger className="min-w-[110px]">
-              <SelectValue placeholder="All" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All</SelectItem>
-              {gameweekOptions.map((gw) => (
-                <SelectItem key={gw} value={String(gw)}>
-                  GW {gw}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
 
-      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-        Search by name
-        <input
-          type="text"
-          placeholder="Display name…"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          style={{
-            flex: 1,
-            maxWidth: 220,
-            padding: "8px 10px",
-            borderRadius: 8,
-            border: "1px solid rgba(255,255,255,0.2)",
-            background: "rgba(255,255,255,0.06)",
-            color: "inherit",
-          }}
-        />
-      </label>
-
-      {err && <p style={{ color: "crimson", marginBottom: 12 }}>Error: {err}</p>}
-      {isCurrentGwView && (
-        <p style={{ marginBottom: 12, fontSize: 13, opacity: 0.85 }}>
-          Current gameweek points may still be settling. Scores update after all matches finish and at least 1 hour passes from the last provider update (nightly settlement run).
-        </p>
-      )}
-      <LeaderboardTable
-        entries={entries}
-        currentUserId={currentUserId}
-        title={title}
-        loading={loading}
-      />
-      {!loading && totalCount > 0 && (
-        <div
-          style={{
-            marginTop: 16,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 12,
-          }}
-        >
-          <span style={{ opacity: 0.8, fontSize: 14 }}>
-            Showing {from}–{to} of {totalCount}
-          </span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              disabled={page <= 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 8,
-                border: "1px solid rgba(255,255,255,0.2)",
-                background: "rgba(255,255,255,0.06)",
-                color: "inherit",
-                cursor: page <= 0 ? "not-allowed" : "pointer",
-                opacity: page <= 0 ? 0.5 : 1,
-              }}
-            >
-              Previous
-            </button>
-            <span style={{ alignSelf: "center", opacity: 0.8, fontSize: 14 }}>
-              Page {page + 1} of {totalPages}
-            </span>
-            <button
-              type="button"
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 8,
-                border: "1px solid rgba(255,255,255,0.2)",
-                background: "rgba(255,255,255,0.06)",
-                color: "inherit",
-                cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
-                opacity: page >= totalPages - 1 ? 0.5 : 1,
-              }}
-            >
-              Next
-            </button>
+        <section className="mb-5 overflow-hidden rounded-2xl border border-border/70 bg-card/80 p-4 shadow-2xl shadow-primary/5 ring-1 ring-primary/10 backdrop-blur sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="mb-2 inline-flex rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                Standings
+              </div>
+              <h1 className="text-2xl font-black tracking-tight text-foreground sm:text-3xl">
+                {currentUserId && myEntry && totalCount > 0 ? (
+                  <>
+                    You are <span className="text-primary">#{myEntry.rank}</span>
+                  </>
+                ) : (
+                  title
+                )}
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {currentUserId && myEntry && totalCount > 0
+                  ? `${subtitle} / ${totalCount} players`
+                  : subtitle}
+              </p>
+            </div>
+            {!currentUserId && totalCount > 0 && (
+              <Link href="/login" className="text-sm font-semibold text-primary hover:underline">
+                Log in to see your rank
+              </Link>
+            )}
           </div>
-        </div>
-      )}
+        </section>
+
+        <section className="mb-5 rounded-2xl border border-border/70 bg-card/70 p-4 shadow-lg shadow-black/10 backdrop-blur">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1.5">
+                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  League
+                </span>
+                <Select
+                  value={leagueId ?? "__global__"}
+                  onValueChange={(v) => setLeague(v === "__global__" ? null : v)}
+                >
+                  <SelectTrigger className="w-full bg-background/55">
+                    <SelectValue placeholder="Global league" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__global__">Global league</SelectItem>
+                    {leagues.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+
+              <label className="space-y-1.5">
+                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Gameweek
+                </span>
+                <Select
+                  value={effectiveGameweek != null ? String(effectiveGameweek) : "__all__"}
+                  onValueChange={(v) => setGameweek(v === "__all__" ? null : Number(v))}
+                >
+                  <SelectTrigger className="w-full bg-background/55">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All gameweeks</SelectItem>
+                    {gameweekOptions.map((gw) => (
+                      <SelectItem key={gw} value={String(gw)}>
+                        GW {gw}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+            </div>
+
+            <label className="space-y-1.5">
+              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Search
+              </span>
+              <input
+                type="text"
+                placeholder="Display name..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="min-h-[40px] w-full rounded-lg border border-input bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 sm:w-56"
+              />
+            </label>
+          </div>
+        </section>
+
+        {err && (
+          <p className="mb-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            Error: {err}
+          </p>
+        )}
+        {isCurrentGwView && (
+          <p className="mb-3 rounded-xl border border-border/70 bg-card/60 px-3 py-2 text-sm text-muted-foreground">
+            Current gameweek points may still be settling. Scores update every 30 minutes.
+          </p>
+        )}
+
+        <LeaderboardTable
+          entries={entries}
+          currentUserId={currentUserId}
+          title={title}
+          loading={loading}
+        />
+
+        {!loading && totalCount > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/60 p-4 shadow-lg shadow-black/10">
+            <span className="text-sm text-muted-foreground">
+              Showing {from}–{to} of {totalCount}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={page <= 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                className="min-h-[40px] rounded-lg border border-border bg-background/55 px-3 py-2 text-sm font-medium text-foreground transition hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="text-sm text-muted-foreground">
+                Page {page + 1} of {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                className="min-h-[40px] rounded-lg border border-border bg-background/55 px-3 py-2 text-sm font-medium text-foreground transition hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </main>
   );
 }
