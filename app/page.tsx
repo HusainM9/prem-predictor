@@ -57,5 +57,5 @@ export default function Home() {
     )
   }
 
-  return <LandingPage onLogin={() => {}} currentGameweek={currentGameweek} />
+  return <LandingPage currentGameweek={currentGameweek} />
 }

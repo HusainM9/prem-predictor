@@ -7,6 +7,13 @@ import { sumTotalPointsFromByGameweek } from "@/lib/history";
 import { HistoryView, type GameweekBonus, type HistoryPrediction } from "@/components/history/HistoryView";
 import type { GotwHistoryEntry } from "@/lib/game-of-the-week-history";
 
+const HISTORY_MAX_GW = 38;
+
+function capSeasonNavMax(gw: number | null): number {
+  if (gw == null || !Number.isFinite(gw) || gw < 1) return HISTORY_MAX_GW;
+  return Math.min(HISTORY_MAX_GW, Math.trunc(gw));
+}
+
 type ByGameweek = Record<
   string,
   { predictions: HistoryPrediction[]; total_points: number; bonuses?: GameweekBonus[] }
@@ -126,7 +133,7 @@ export default function HistoryPage() {
     );
   }
 
-  const effectiveGw = currentGameweek ?? 38;
+  const effectiveGw = capSeasonNavMax(currentGameweek);
   const gw = Math.max(1, Math.min(effectiveGw, selectedGameweek));
 
   return (

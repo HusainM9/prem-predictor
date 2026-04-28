@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { LeaderboardPreview } from "@/components/leaderboard-preview"
 import { FixtureCard } from "@/components/fixture-card"
@@ -30,10 +31,8 @@ const mockFixtures = [
 ]
 
 export function LandingPage({
-  onLogin,
   currentGameweek = null,
 }: {
-  onLogin: () => void
   currentGameweek?: number | null
 }) {
   return (
@@ -56,17 +55,19 @@ export function LandingPage({
             </p>
           </div>
           <div className="flex flex-col gap-2 max-sm:gap-2 sm:flex-row sm:gap-3">
-            <Button size="lg" className="w-full font-semibold text-base px-8 max-sm:w-full max-sm:py-2.5 max-sm:text-sm sm:w-auto" onClick={onLogin}>
-              Create a League
-              <ChevronRight className="size-4" />
+            <Button size="lg" className="w-full font-semibold text-base px-8 max-sm:w-full max-sm:py-2.5 max-sm:text-sm sm:w-auto" asChild>
+              <Link href="/signup">
+                Create a League
+                <ChevronRight className="size-4" />
+              </Link>
             </Button>
             <Button
               size="lg"
               variant="outline"
               className="w-full font-semibold text-base px-8 max-sm:w-full max-sm:py-2.5 max-sm:text-sm sm:w-auto"
-              onClick={onLogin}
+              asChild
             >
-              Join a League
+              <Link href="/signup">Join a League</Link>
             </Button>
           </div>
         </div>
@@ -103,7 +104,7 @@ export function LandingPage({
                     homeTeam={fixture.homeTeam}
                     awayTeam={fixture.awayTeam}
                     kickoff={fixture.kickoff}
-                    onPredict={onLogin}
+                    predictHref="/signup"
                   />
                 ))}
               </div>
@@ -215,9 +216,11 @@ export function LandingPage({
             <p className="max-w-md text-sm text-muted-foreground max-sm:text-xs sm:text-base">
               Create your league, invite your friends, and start predicting this week.
             </p>
-            <Button size="lg" className="w-full font-semibold text-base px-8 max-sm:w-full max-sm:text-sm sm:w-auto" onClick={onLogin}>
-              Get Started Free
-              <ChevronRight className="size-4" />
+            <Button size="lg" className="w-full font-semibold text-base px-8 max-sm:w-full max-sm:text-sm sm:w-auto" asChild>
+              <Link href="/signup">
+                Get Started Free
+                <ChevronRight className="size-4" />
+              </Link>
             </Button>
           </div>
         </div>

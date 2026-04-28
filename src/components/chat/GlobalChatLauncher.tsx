@@ -11,6 +11,8 @@ const HIDE_ON_PATHS = new Set(["/login", "/signup"]);
 
 export function GlobalChatLauncher() {
   const [open, setOpen] = useState(false);
+  /** Once true, keep ChatPanel mounted while authed so realtime + state survive closing the panel. */
+  const [chatMounted, setChatMounted] = useState(false);
   const [authed, setAuthed] = useState(false);
   const pathname = usePathname();
 
@@ -20,7 +22,10 @@ export function GlobalChatLauncher() {
     });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthed(!!session);
-      if (!session) setOpen(false);
+      if (!session) {
+        setOpen(false);
+        setChatMounted(false);
+      }
     });
     return () => {
       data.subscription.unsubscribe();
@@ -32,8 +37,11 @@ export function GlobalChatLauncher() {
 
   return (
     <div className="fixed bottom-4 right-4 z-40">
-      {open && (
-        <div className="mb-2 w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-[420px] sm:max-w-[calc(100vw-2rem)] lg:w-[520px]">
+      {chatMounted && (
+        <div
+          className={`mb-2 w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-[420px] sm:max-w-[calc(100vw-2rem)] lg:w-[520px] ${open ? "" : "hidden"}`}
+          aria-hidden={!open}
+        >
           <ChatPanel
             scope="general"
             title="Global chat"
@@ -44,7 +52,13 @@ export function GlobalChatLauncher() {
       <Button
         type="button"
         className="h-12 w-12 rounded-full shadow-lg"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setOpen((v) => {
+            const next = !v;
+            if (next) setChatMounted(true);
+            return next;
+          });
+        }}
         aria-label={open ? "Close global chat" : "Open global chat"}
       >
         {open ? <X className="size-5" /> : <MessageCircle className="size-5" />}

@@ -68,7 +68,6 @@ export type ChatScope = "general" | "league";
 type UseChatOptions = {
   scope: ChatScope;
   leagueId?: string | null;
-  /** Per-request page size; default 25. */
   limit?: number;
 };
 
@@ -104,7 +103,6 @@ export function useChatMessages({ scope, leagueId = null, limit = CHAT_PAGE_SIZE
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const retentionMsRef = useRef<number | null | undefined>(null);
-  /** Drives the periodic prune; ref alone does not re-render. */
   const [retentionMsForPrune, setRetentionMsForPrune] = useState<number | null>(null);
   const channelKey = useMemo(() => `${scope}:${leagueId ?? "global"}`, [scope, leagueId]);
 
@@ -169,7 +167,6 @@ export function useChatMessages({ scope, leagueId = null, limit = CHAT_PAGE_SIZE
         return;
       }
 
-      // Load older: prepend
       setMessages((prev) => {
         const merged = dedupeById([...list, ...prev]).sort((a, b) => a.created_at.localeCompare(b.created_at));
         return applyRetentionList(merged, maxAge);
@@ -199,7 +196,7 @@ export function useChatMessages({ scope, leagueId = null, limit = CHAT_PAGE_SIZE
     }
   }, [fetchPage, hasMore, loading, loadingMore, messages]);
 
-  /** Merge the latest "page" from the server with older messages we already paged in (Realtime insert). */
+  /** Merge the latest page with older message*/
   const mergeLatestTail = useCallback(async () => {
     const {
       data: { session },
@@ -224,8 +221,11 @@ export function useChatMessages({ scope, leagueId = null, limit = CHAT_PAGE_SIZE
     if (tail.length === 0) return;
     setMessages((prev) => {
       const tMin = tail[0].created_at;
-      const kept = prev.filter((m) => m.created_at < tMin);
-      const merged = dedupeById([...kept, ...tail]).sort((a, b) => a.created_at.localeCompare(b.created_at));
+      const pending = prev.filter((m) => m.pending);
+      const kept = prev.filter((m) => !m.pending && m.created_at < tMin);
+      const merged = dedupeById([...kept, ...tail, ...pending]).sort((a, b) =>
+        a.created_at.localeCompare(b.created_at)
+      );
       return applyRetentionList(merged, maxAge);
     });
     if (data.hasMore === true) {
@@ -239,7 +239,6 @@ export function useChatMessages({ scope, leagueId = null, limit = CHAT_PAGE_SIZE
     });
   }, [fetchInitial]);
 
-  /** Drop past retention for global chat while tab stays open; league is long-term. */
   useEffect(() => {
     if (maxAgeForPrune == null) return;
     const id = setInterval(() => {
@@ -276,6 +275,29 @@ export function useChatMessages({ scope, leagueId = null, limit = CHAT_PAGE_SIZE
       void supabase.removeChannel(channel);
     };
   }, [channelKey, leagueId, mergeLatestTail, scope]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      void mergeLatestTail();
+    };
+    const onFocus = () => {
+      void mergeLatestTail();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [mergeLatestTail]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      void mergeLatestTail();
+    }, 12_000);
+    return () => window.clearInterval(id);
+  }, [mergeLatestTail]);
 
   const sendMessage = useCallback(
     async ({

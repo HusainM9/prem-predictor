@@ -25,6 +25,21 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Missing SUPABASE_SERVICE_ROLE_KEY" }, { status: 500 });
     }
     const supabase = createClient(supabaseUrl, serviceKey);
+    const nowIso = new Date().toISOString();
+
+    async function fetchCurrentSeasonGameweek(): Promise<number | null> {
+      const { data: gwRow } = await supabase
+        .from("fixtures")
+        .select("gameweek")
+        .eq("season", "2025/26")
+        .lt("kickoff_time", nowIso)
+        .order("kickoff_time", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const g = gwRow?.gameweek;
+      if (g != null && Number.isInteger(g) && g >= 1) return g;
+      return null;
+    }
 
     const { searchParams } = new URL(req.url);
     const gameweekParam = searchParams.get("gameweek");
@@ -51,11 +66,16 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: predErr.message }, { status: 500 });
     }
     if (!predictions?.length) {
-      return NextResponse.json({ predictions: [], fixtures: {} });
+      const current_gameweek = await fetchCurrentSeasonGameweek();
+      return NextResponse.json({
+        predictions: [],
+        fixtures: {},
+        by_gameweek: {},
+        current_gameweek,
+      });
     }
 
     const fixtureIds = [...new Set(predictions.map((p) => p.fixture_id))];
-    const nowIso = new Date().toISOString();
     const { data: fixtures, error: fxErr } = await supabase
       .from("fixtures")
       .select("id, home_team, away_team, kickoff_time, gameweek, status, home_goals, away_goals")
@@ -136,18 +156,7 @@ export async function GET(req: Request) {
       }
     }
 
-    let current_gameweek: number | null = null;
-    const { data: gwRow } = await supabase
-      .from("fixtures")
-      .select("gameweek")
-      .eq("season", "2025/26")
-      .lt("kickoff_time", nowIso)
-      .order("kickoff_time", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (gwRow?.gameweek != null && Number.isInteger(gwRow.gameweek)) {
-      current_gameweek = gwRow.gameweek;
-    }
+    const current_gameweek = await fetchCurrentSeasonGameweek();
 
     return NextResponse.json({
       predictions: list,

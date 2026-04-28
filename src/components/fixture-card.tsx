@@ -17,7 +17,8 @@ interface FixtureCardProps {
   predicted?: boolean
   prediction?: { home: number; away: number }
   className?: string
-  onPredict?: () => void
+  /** Destination for the Predict button when not yet predicted (default /play). */
+  predictHref?: string
 }
 
 export function FixtureCard({
@@ -27,7 +28,7 @@ export function FixtureCard({
   predicted = false,
   prediction,
   className,
-  onPredict,
+  predictHref = "/play",
 }: FixtureCardProps) {
   return (
     <div
@@ -72,7 +73,7 @@ export function FixtureCard({
           </div>
         ) : (
           <Button size="sm" asChild className="gap-1 max-sm:h-7 max-sm:px-2 max-sm:text-xs sm:h-auto sm:px-3">
-            <Link href="/play">
+            <Link href={predictHref}>
               Predict
               <ChevronRight className="size-3 max-sm:size-3 sm:size-3.5" />
             </Link>

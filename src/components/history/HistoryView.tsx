@@ -57,6 +57,14 @@ type Props = {
 
 const MAX_GW = 38;
 
+/** Upper bound for gameweek navigation (invalid / missing season progress → full season). */
+function capNavMaxGameweek(currentGameweek: number | null): number {
+  if (currentGameweek == null || !Number.isFinite(currentGameweek) || currentGameweek < 1) {
+    return MAX_GW;
+  }
+  return Math.min(MAX_GW, Math.trunc(currentGameweek));
+}
+
 function outcomeType(p: HistoryPrediction): "exact" | "correct" | "wrong" | "pending" | "hidden" {
   if (p.prediction_hidden) return "hidden";
   if (!p.settled_at) return "pending";
@@ -118,7 +126,7 @@ export function HistoryView({
   ).length;
   const pendingCount = predictionsForGw.filter((p) => !p.prediction_hidden && !p.settled_at).length;
 
-  const maxGw = currentGameweek ?? MAX_GW;
+  const maxGw = capNavMaxGameweek(currentGameweek);
   const gwNum = Math.max(1, Math.min(maxGw, selectedGameweek));
 
   const handleGwInputChange = useCallback(
@@ -318,6 +326,19 @@ export function HistoryView({
             </span>
           </h2>
 
+          {predictionsForGw.length === 0 ? (
+            <div className="mt-3 rounded-2xl border border-border/70 bg-card/70 p-4 text-sm text-muted-foreground shadow-lg shadow-black/10 backdrop-blur">
+              <p>
+                No settled predictions for Gameweek {gwNum} yet. When past fixtures are scored, they show up here.
+              </p>
+              <p className="mt-3">
+                <Link href="/play" className="font-semibold text-primary underline underline-offset-4 hover:text-primary/90">
+                  Go to Play
+                </Link>
+                {" "}to make picks, or use the arrows above to browse other gameweeks.
+              </p>
+            </div>
+          ) : (
           <ul className="mt-2 list-none space-y-2 p-0 m-0 max-sm:mt-2 sm:mt-3">
             {predictionsForGw.map((p) => {
               const type = outcomeType(p);
@@ -439,6 +460,7 @@ export function HistoryView({
               );
             })}
           </ul>
+          )}
 
           {exactCount >= 4 && predictionsForGw.length > 0 && (
             <div className="mt-4 rounded-xl bg-primary/15 border border-primary/30 px-4 py-3 text-primary text-sm font-medium">
