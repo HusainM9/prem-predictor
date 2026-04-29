@@ -70,6 +70,7 @@ type MessageReplyMeta = {
 type ChatMessageReport = {
   id: string;
   message_id: string;
+  reported_user_id: string;
   reason: string | null;
   status: string | null;
   created_at: string;
@@ -110,9 +111,10 @@ export function ChatPanel({
   const [selectedPredictionId, setSelectedPredictionId] = useState<string | null>(null);
   const [loadingShareables, setLoadingShareables] = useState(false);
   const [banReason, setBanReason] = useState("");
-  const [banUserId, setBanUserId] = useState("");
   const [canModerate, setCanModerate] = useState(false);
-  const [bans, setBans] = useState<Array<{ id: string; banned_user_id: string; reason: string | null }>>([]);
+  const [bans, setBans] = useState<
+    Array<{ id: string; banned_user_id: string; banned_display_name?: string | null; reason: string | null }>
+  >([]);
   const [sending, setSending] = useState(false);
   const [modMessage, setModMessage] = useState<string | null>(null);
   const [replyToMessage, setReplyToMessage] = useState<ChatMessage | null>(null);
@@ -320,8 +322,11 @@ export function ChatPanel({
     }
   }
 
-  async function banUser() {
-    if (!leagueId || !banUserId.trim()) return;
+  async function banUser(args: { bannedUserId: string; displayName: string; reason?: string | null }) {
+    if (!leagueId || !args.bannedUserId.trim()) return;
+    const confirmed = window.confirm(`Ban ${args.displayName} from this league chat?`);
+    if (!confirmed) return;
+
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) return;
@@ -333,8 +338,8 @@ export function ChatPanel({
       },
       body: JSON.stringify({
         leagueId,
-        bannedUserId: banUserId.trim(),
-        reason: banReason,
+        bannedUserId: args.bannedUserId.trim(),
+        reason: args.reason ?? banReason,
       }),
     });
     const body = await res.json().catch(() => ({}));
@@ -345,9 +350,16 @@ export function ChatPanel({
     setModMessage("User chat banned.");
     setBans((prev) => {
       const next = prev.filter((b) => b.banned_user_id !== body.ban.banned_user_id);
-      return [{ id: body.ban.id, banned_user_id: body.ban.banned_user_id, reason: body.ban.reason }, ...next];
+      return [
+        {
+          id: body.ban.id,
+          banned_user_id: body.ban.banned_user_id,
+          banned_display_name: args.displayName,
+          reason: body.ban.reason,
+        },
+        ...next,
+      ];
     });
-    setBanUserId("");
     setBanReason("");
   }
 
@@ -611,27 +623,22 @@ export function ChatPanel({
       {scope === "league" && canModerate && (
         <div className="border-t border-border p-3 space-y-2">
           <p className="text-xs font-semibold text-foreground">Moderator tools</p>
-          <Input
-            value={banUserId}
-            onChange={(e) => setBanUserId(e.target.value)}
-            placeholder="User ID to chat-ban"
-          />
+          <p className="text-xs text-muted-foreground">
+            Ban users from a message action or a report below. User IDs are handled automatically.
+          </p>
           <Input
             value={banReason}
             onChange={(e) => setBanReason(e.target.value)}
-            placeholder="Reason (optional)"
+            placeholder="Default ban reason (optional)"
             maxLength={250}
           />
-          <Button type="button" size="sm" variant="destructive" onClick={banUser}>
-            Ban from league chat
-          </Button>
           {modMessage && <p className="text-xs text-muted-foreground">{modMessage}</p>}
           {bans.length > 0 && (
             <div className="space-y-1">
               {bans.map((b) => (
                 <div key={b.id} className="flex items-center justify-between rounded border border-border p-2 text-xs">
-                  <span className="truncate pr-2">
-                    {b.banned_user_id}
+                  <span className="min-w-0 truncate pr-2">
+                    {b.banned_display_name ?? b.banned_user_id}
                     {b.reason ? ` - ${b.reason}` : ""}
                   </span>
                   <Button type="button" size="sm" variant="outline" onClick={() => unbanUser(b.banned_user_id)}>
@@ -657,6 +664,21 @@ export function ChatPanel({
                     <p className="text-[10px] text-muted-foreground">
                       {formatShortDate(r.created_at)} {formatTime(r.created_at)} | {r.status ?? "open"}
                     </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      className="mt-2"
+                      onClick={() =>
+                        void banUser({
+                          bannedUserId: r.reported_user_id,
+                          displayName: r.message_snapshot?.sender_display_name ?? "this user",
+                          reason: r.reason,
+                        })
+                      }
+                    >
+                      Ban reported user
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -712,6 +734,22 @@ export function ChatPanel({
             >
               Report
             </Button>
+            {scope === "league" && canModerate && actionMessage && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => {
+                  if (!actionMessage) return;
+                  void banUser({
+                    bannedUserId: actionMessage.user_id,
+                    displayName: actionMessage.sender_display_name,
+                  });
+                  setActionMessage(null);
+                }}
+              >
+                Ban user
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

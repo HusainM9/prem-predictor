@@ -66,7 +66,25 @@ export async function GET(req: Request) {
       .order("created_at", { ascending: false });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    return NextResponse.json({ can_moderate: true, bans: bans ?? [] });
+    const bannedUserIds = [...new Set((bans ?? []).map((b) => b.banned_user_id).filter(Boolean))];
+    let profileByUser = new Map<string, { display_name: string | null }>();
+    if (bannedUserIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id,display_name")
+        .in("id", bannedUserIds);
+      profileByUser = new Map(
+        (profiles ?? []).map((p) => [p.id as string, { display_name: (p.display_name as string | null) ?? null }])
+      );
+    }
+
+    return NextResponse.json({
+      can_moderate: true,
+      bans: (bans ?? []).map((b) => ({
+        ...b,
+        banned_display_name: profileByUser.get(b.banned_user_id)?.display_name ?? null,
+      })),
+    });
   } catch (err: unknown) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
