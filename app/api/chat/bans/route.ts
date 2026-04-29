@@ -128,23 +128,41 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "User is not in this league." }, { status: 400 });
     }
 
-    const { data, error } = await supabase
+    const reason = reasonRaw.length > 0 ? reasonRaw.slice(0, 250) : null;
+    const nowIso = new Date().toISOString();
+
+    const { data: existing, error: existingErr } = await supabase
       .from("chat_bans")
-      .upsert(
-        {
-          league_id: leagueId,
-          banned_user_id: bannedUserId,
-          created_by: viewer.id,
-          reason: reasonRaw.length > 0 ? reasonRaw.slice(0, 250) : null,
-          created_at: new Date().toISOString(),
-          expires_at: null,
-        },
-        {
-          onConflict: "league_id,banned_user_id",
-        }
-      )
-      .select("id,banned_user_id,created_by,reason,created_at,expires_at")
-      .single();
+      .select("id")
+      .eq("league_id", leagueId)
+      .eq("banned_user_id", bannedUserId)
+      .maybeSingle();
+    if (existingErr) return NextResponse.json({ error: existingErr.message }, { status: 500 });
+
+    const payload = {
+      league_id: leagueId,
+      banned_user_id: bannedUserId,
+      created_by: viewer.id,
+      reason,
+      created_at: nowIso,
+      expires_at: null as string | null,
+    };
+
+    const banQuery = existing?.id
+      ? supabase
+          .from("chat_bans")
+          .update({
+            created_by: viewer.id,
+            reason,
+            created_at: nowIso,
+            expires_at: null,
+          })
+          .eq("id", existing.id)
+          .select("id,banned_user_id,created_by,reason,created_at,expires_at")
+          .single()
+      : supabase.from("chat_bans").insert(payload).select("id,banned_user_id,created_by,reason,created_at,expires_at").single();
+
+    const { data, error } = await banQuery;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     return NextResponse.json({ ban: data });
