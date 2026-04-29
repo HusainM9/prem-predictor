@@ -487,6 +487,7 @@ function ChatModerationWorkspace({ onQueueChanged }: { onQueueChanged?: () => vo
   const [reports, setReports] = useState<AdminChatReport[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
   const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
+  const [banningReportId, setBanningReportId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState("");
 
   const loadReports = useCallback(
@@ -533,6 +534,40 @@ function ChatModerationWorkspace({ onQueueChanged }: { onQueueChanged?: () => vo
       onQueueChanged?.();
     } finally {
       setUpdatingReportId(null);
+    }
+  }
+
+  async function banReportedUser(report: AdminChatReport) {
+    const label = report.message_snapshot?.sender_display_name ?? report.reported_user_id;
+    const scopeLabel =
+      report.scope === "general"
+        ? "global chat"
+        : `league chat${report.league_name ? ` (${report.league_name})` : ""}`;
+    const confirmed = window.confirm(`Ban ${label} from ${scopeLabel} and mark this report resolved?`);
+    if (!confirmed) return;
+
+    setBanningReportId(report.id);
+    setErrorText("");
+    try {
+      const res = await fetch("/api/admin/chat-bans", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reportId: report.id,
+          reason: report.reason ?? "Banned from admin report",
+          resolveReport: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorText(typeof data.error === "string" ? data.error : "Failed to ban reported user.");
+        return;
+      }
+      await loadReports();
+      onQueueChanged?.();
+    } finally {
+      setBanningReportId(null);
     }
   }
 
@@ -683,6 +718,9 @@ function ChatModerationWorkspace({ onQueueChanged }: { onQueueChanged?: () => vo
                 <strong>{report.message_snapshot?.reporter_display_name ?? "Reporter"}</strong> reported{" "}
                 <strong>{report.message_snapshot?.sender_display_name ?? "User"}</strong>
               </p>
+              <p style={{ margin: "0 0 10px", fontSize: 12, opacity: 0.65, wordBreak: "break-all" }}>
+                Reported user ID: <code>{report.reported_user_id}</code>
+              </p>
               <div
                 style={{
                   margin: "0 0 12px",
@@ -706,7 +744,19 @@ function ChatModerationWorkspace({ onQueueChanged }: { onQueueChanged?: () => vo
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                 <button
                   type="button"
-                  disabled={updatingReportId === report.id || report.status === "reviewed"}
+                  disabled={banningReportId === report.id || updatingReportId === report.id}
+                  onClick={() => void banReportedUser(report)}
+                  style={{
+                    ...btnStyle,
+                    background: "rgba(220, 38, 38, 0.28)",
+                    border: "1px solid rgba(248, 113, 113, 0.55)",
+                  }}
+                >
+                  {banningReportId === report.id ? "Banning…" : "Ban user"}
+                </button>
+                <button
+                  type="button"
+                  disabled={updatingReportId === report.id || banningReportId === report.id || report.status === "reviewed"}
                   onClick={() => void updateStatus(report.id, "reviewed")}
                   style={btnStyle}
                 >
@@ -714,7 +764,7 @@ function ChatModerationWorkspace({ onQueueChanged }: { onQueueChanged?: () => vo
                 </button>
                 <button
                   type="button"
-                  disabled={updatingReportId === report.id || report.status === "resolved"}
+                  disabled={updatingReportId === report.id || banningReportId === report.id || report.status === "resolved"}
                   onClick={() => void updateStatus(report.id, "resolved")}
                   style={btnStyle}
                 >
@@ -722,7 +772,7 @@ function ChatModerationWorkspace({ onQueueChanged }: { onQueueChanged?: () => vo
                 </button>
                 <button
                   type="button"
-                  disabled={updatingReportId === report.id || report.status === "dismissed"}
+                  disabled={updatingReportId === report.id || banningReportId === report.id || report.status === "dismissed"}
                   onClick={() => void updateStatus(report.id, "dismissed")}
                   style={{ ...btnStyle, background: "rgba(255,255,255,0.06)" }}
                 >
@@ -730,7 +780,7 @@ function ChatModerationWorkspace({ onQueueChanged }: { onQueueChanged?: () => vo
                 </button>
                 <button
                   type="button"
-                  disabled={updatingReportId === report.id || report.status === "open"}
+                  disabled={updatingReportId === report.id || banningReportId === report.id || report.status === "open"}
                   onClick={() => void updateStatus(report.id, "open")}
                   style={{ ...btnStyle, background: "rgba(255,255,255,0.04)" }}
                 >

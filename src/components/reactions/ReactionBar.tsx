@@ -26,6 +26,11 @@ export function ReactionBar({
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const pickerHostRef = useRef<HTMLDivElement | null>(null);
+  const onReactRef = useRef(onReact);
+
+  useEffect(() => {
+    onReactRef.current = onReact;
+  }, [onReact]);
 
   useEffect(() => {
     if (!open) return;
@@ -51,14 +56,14 @@ export function ReactionBar({
       onEmojiSelect: (emoji: { native?: string }) => {
         if (!emoji?.native) return;
         setOpen(false);
-        onReact(emoji.native);
+        onReactRef.current(emoji.native);
       },
     });
     host.appendChild(picker as unknown as Node);
     return () => {
       host.replaceChildren();
     };
-  }, [open, onReact]);
+  }, [open]);
 
   const displayedQuick = [...QUICK_REACTION_EMOJIS].sort((a, b) => {
     const aCount = summary.counts[a] ?? 0;

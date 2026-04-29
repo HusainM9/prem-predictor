@@ -16,12 +16,12 @@ function toSummaryMap(value: unknown): SummaryMap {
 }
 
 export function useReactions(targetType: ReactionTargetType, targetIds: string[]) {
-  const normalizedIds = useMemo(
-    () => [...new Set(targetIds.filter(Boolean))].sort(),
+  const key = useMemo(
+    () => [...new Set(targetIds.filter(Boolean))].sort().join(","),
     [targetIds]
   );
+  const normalizedIds = useMemo(() => (key ? key.split(",") : []), [key]);
   const idsSet = useMemo(() => new Set(normalizedIds), [normalizedIds]);
-  const key = normalizedIds.join(",");
   const [summaryById, setSummaryById] = useState<SummaryMap>({});
   const [pendingById, setPendingById] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<string | null>(null);
@@ -29,7 +29,7 @@ export function useReactions(targetType: ReactionTargetType, targetIds: string[]
 
   const fetchSummary = useCallback(async () => {
     if (normalizedIds.length === 0) {
-      setSummaryById({});
+      setSummaryById((prev) => (Object.keys(prev).length === 0 ? prev : {}));
       return;
     }
     if (fetchInFlightRef.current) return;
