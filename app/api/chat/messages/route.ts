@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { buildPredictionSharePayload, type ShareablePredictionRow } from "@/lib/chat/prediction-share";
 import { validateChatText } from "@/lib/chat/moderation";
 import { getChatMessageRetentionMs, getChatMessagesNotBeforeIso } from "@/lib/chat/retention";
+import { canDeleteLeagueChatMessages, type LeagueMemberRole } from "@/lib/chat/permissions";
 import {
   CHAT_DUPLICATE_WINDOW_MS,
   CHAT_PAGE_SIZE,
@@ -59,6 +60,22 @@ async function isLeagueMember(
     .eq("user_id", userId)
     .maybeSingle();
   return !!data;
+}
+
+async function getLeagueMemberRole(
+  supabase: ServiceSupabaseClient,
+  leagueId: string,
+  userId: string
+): Promise<LeagueMemberRole> {
+  const { data } = await supabase
+    .from("league_members")
+    .select("role")
+    .eq("league_id", leagueId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!data || typeof data.role !== "string") return null;
+  if (data.role === "owner" || data.role === "admin" || data.role === "member") return data.role;
+  return null;
 }
 
 async function isUserBannedInScope(
@@ -224,7 +241,6 @@ export async function GET(req: Request) {
       messages: normalizeMessageRows(ordered, profileByUser),
       hasMore,
       pageSize,
-      /** Global chat only: retention window. League chat has no time cap. */
       retention: {
         maxAgeMs: scope === "general" ? getChatMessageRetentionMs() : null,
       },
@@ -453,6 +469,64 @@ export async function POST(req: Request) {
         sender_favourite_team: profile?.favourite_team ?? null,
       },
     });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const authHeader = req.headers.get("authorization");
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const viewer = await getViewer(token);
+    if (!viewer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const body = await req.json().catch(() => ({}));
+    const leagueId = typeof body.leagueId === "string" ? body.leagueId.trim() : "";
+    const messageId = typeof body.messageId === "string" ? body.messageId.trim() : "";
+    const reportId = typeof body.reportId === "string" ? body.reportId.trim() : "";
+
+    if (!leagueId || !messageId) {
+      return NextResponse.json({ error: "leagueId and messageId are required" }, { status: 400 });
+    }
+
+    const { supabase } = await getClients();
+    const role = await getLeagueMemberRole(supabase, leagueId, viewer.id);
+    if (!canDeleteLeagueChatMessages(role)) {
+      return NextResponse.json({ error: "Only league owners can delete league chat messages." }, { status: 403 });
+    }
+
+    const { data: message, error: messageError } = await supabase
+      .from("messages")
+      .select("id,league_id")
+      .eq("id", messageId)
+      .maybeSingle();
+    if (messageError) return NextResponse.json({ error: messageError.message }, { status: 500 });
+    if (!message) return NextResponse.json({ error: "Message not found" }, { status: 404 });
+    if (message.league_id !== leagueId) {
+      return NextResponse.json({ error: "Message is not in this league chat." }, { status: 400 });
+    }
+
+    let reportQuery = supabase
+      .from("chat_message_reports")
+      .update({ status: "resolved" })
+      .eq("league_id", leagueId)
+      .eq("message_id", messageId);
+    if (reportId) {
+      reportQuery = reportQuery.eq("id", reportId);
+    } else {
+      reportQuery = reportQuery.eq("status", "open");
+    }
+    const { error: reportError } = await reportQuery;
+    if (reportError) return NextResponse.json({ error: reportError.message }, { status: 500 });
+
+    const { error: deleteError } = await supabase.from("messages").delete().eq("id", messageId);
+    if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+
+    return NextResponse.json({ ok: true, messageId });
   } catch (err: unknown) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },

@@ -277,12 +277,24 @@ export function useChatMessages({ scope, leagueId = null, limit = CHAT_PAGE_SIZE
           void mergeLatestTail();
         }
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "messages",
+          ...(filter ? { filter } : {}),
+        },
+        () => {
+          void fetchInitial();
+        }
+      )
       .subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [channelKey, leagueId, mergeLatestTail, scope]);
+  }, [channelKey, fetchInitial, leagueId, mergeLatestTail, scope]);
 
   useEffect(() => {
     const onVisible = () => {
@@ -447,6 +459,45 @@ export function useChatMessages({ scope, leagueId = null, limit = CHAT_PAGE_SIZE
     };
   }, []);
 
+  const deleteMessage = useCallback(
+    async (args: { messageId: string; reportId?: string | null }) => {
+      if (scope !== "league" || !leagueId) {
+        setError("Messages can only be deleted from league chat.");
+        return false;
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setError("You need to log in to delete messages.");
+        return false;
+      }
+
+      const res = await fetch("/api/chat/messages", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          leagueId,
+          messageId: args.messageId,
+          reportId: args.reportId ?? null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(typeof data.error === "string" ? data.error : "Failed to delete message.");
+        return false;
+      }
+
+      setMessages((prev) => prev.filter((m) => m.id !== args.messageId));
+      return true;
+    },
+    [leagueId, scope]
+  );
+
   return {
     messages,
     loading,
@@ -456,6 +507,7 @@ export function useChatMessages({ scope, leagueId = null, limit = CHAT_PAGE_SIZE
     sendTextMessage,
     sendPredictionShare,
     fetchShareablePredictions,
+    deleteMessage,
     refresh: fetchInitial,
     loadOlder,
   };

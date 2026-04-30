@@ -71,6 +71,7 @@ export async function GET(req: Request) {
         "id,message_id,reporter_user_id,reported_user_id,league_id,scope,reason,message_snapshot,status,created_at"
       )
       .eq("league_id", leagueId)
+      .or("status.is.null,status.eq.open")
       .order("created_at", { ascending: false })
       .limit(100);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -178,6 +179,50 @@ export async function POST(req: Request) {
       .select("id,message_id,reporter_user_id,reported_user_id,league_id,scope,reason,message_snapshot,status,created_at")
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json({ report });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(req: Request) {
+  try {
+    const authHeader = req.headers.get("authorization");
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const viewer = await getViewer(token);
+    if (!viewer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const body = await req.json().catch(() => ({}));
+    const leagueId = typeof body.leagueId === "string" ? body.leagueId.trim() : "";
+    const reportId = typeof body.reportId === "string" ? body.reportId.trim() : "";
+    const status = typeof body.status === "string" ? body.status.trim() : "";
+
+    if (!leagueId || !reportId) {
+      return NextResponse.json({ error: "leagueId and reportId are required" }, { status: 400 });
+    }
+    if (status !== "dismissed" && status !== "resolved") {
+      return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    }
+
+    const { supabase } = await getClients();
+    const role = await getLeagueMemberRole(supabase, leagueId, viewer.id);
+    if (!canModerateLeagueChat(role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { data: report, error } = await supabase
+      .from("chat_message_reports")
+      .update({ status })
+      .eq("id", reportId)
+      .eq("league_id", leagueId)
+      .select("id,message_id,reporter_user_id,reported_user_id,league_id,scope,reason,message_snapshot,status,created_at")
+      .maybeSingle();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!report) return NextResponse.json({ error: "Report not found" }, { status: 404 });
 
     return NextResponse.json({ report });
   } catch (err: unknown) {

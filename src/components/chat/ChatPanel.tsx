@@ -112,6 +112,7 @@ export function ChatPanel({
   const [loadingShareables, setLoadingShareables] = useState(false);
   const [banReason, setBanReason] = useState("");
   const [canModerate, setCanModerate] = useState(false);
+  const [canDeleteLeagueMessages, setCanDeleteLeagueMessages] = useState(false);
   const [bans, setBans] = useState<
     Array<{ id: string; banned_user_id: string; banned_display_name?: string | null; reason: string | null }>
   >([]);
@@ -137,6 +138,7 @@ export function ChatPanel({
     sendTextMessage,
     sendPredictionShare,
     fetchShareablePredictions,
+    deleteMessage,
     loadOlder,
   } = useChatMessages({ scope, leagueId });
 
@@ -183,6 +185,7 @@ export function ChatPanel({
       const body = await res.json().catch(() => ({}));
       if (res.ok) {
         setCanModerate(!!body.can_moderate);
+        setCanDeleteLeagueMessages(!!body.can_delete_messages);
         if (Array.isArray(body.bans)) setBans(body.bans);
       }
     });
@@ -322,14 +325,14 @@ export function ChatPanel({
     }
   }
 
-  async function banUser(args: { bannedUserId: string; displayName: string; reason?: string | null }) {
-    if (!leagueId || !args.bannedUserId.trim()) return;
+  async function banUser(args: { bannedUserId: string; displayName: string; reason?: string | null; reportId?: string | null }) {
+    if (!leagueId || !args.bannedUserId.trim()) return false;
     const confirmed = window.confirm(`Ban ${args.displayName} from this league chat?`);
-    if (!confirmed) return;
+    if (!confirmed) return false;
 
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
-    if (!token) return;
+    if (!token) return false;
     const res = await fetch("/api/chat/bans", {
       method: "POST",
       headers: {
@@ -339,13 +342,14 @@ export function ChatPanel({
       body: JSON.stringify({
         leagueId,
         bannedUserId: args.bannedUserId.trim(),
+        reportId: args.reportId ?? null,
         reason: args.reason ?? banReason,
       }),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       setModMessage(typeof body.error === "string" ? body.error : "Failed to ban user.");
-      return;
+      return false;
     }
     setModMessage("User chat banned.");
     setBans((prev) => {
@@ -360,7 +364,11 @@ export function ChatPanel({
         ...next,
       ];
     });
+    if (args.reportId) {
+      setReports((prev) => prev.filter((r) => r.id !== args.reportId));
+    }
     setBanReason("");
+    return true;
   }
 
   async function unbanUser(bannedUserId: string) {
@@ -382,6 +390,45 @@ export function ChatPanel({
     if (res.ok) {
       setBans((prev) => prev.filter((b) => b.banned_user_id !== bannedUserId));
     }
+  }
+
+  async function dismissReport(reportId: string) {
+    if (!leagueId) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    const res = await fetch("/api/chat/reports", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        leagueId,
+        reportId,
+        status: "dismissed",
+      }),
+    });
+    if (res.ok) {
+      setReports((prev) => prev.filter((r) => r.id !== reportId));
+      setModMessage("Report dismissed.");
+      return;
+    }
+    const body = await res.json().catch(() => ({}));
+    setModMessage(typeof body.error === "string" ? body.error : "Failed to dismiss report.");
+  }
+
+  async function deleteLeagueMessage(messageId: string, reportId?: string | null) {
+    if (!canDeleteLeagueMessages) return false;
+    const confirmed = window.confirm("Delete this league chat message?");
+    if (!confirmed) return false;
+    const ok = await deleteMessage({ messageId, reportId });
+    if (!ok) return false;
+    if (reportId) {
+      setReports((prev) => prev.filter((r) => r.id !== reportId));
+    }
+    setModMessage("Message deleted.");
+    return true;
   }
 
   function renderPredictionCard(m: ChatMessage) {
@@ -674,11 +721,32 @@ export function ChatPanel({
                           bannedUserId: r.reported_user_id,
                           displayName: r.message_snapshot?.sender_display_name ?? "this user",
                           reason: r.reason,
+                          reportId: r.id,
                         })
                       }
                     >
                       Ban reported user
                     </Button>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {canDeleteLeagueMessages && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => void deleteLeagueMessage(r.message_id, r.id)}
+                        >
+                          Delete message
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void dismissReport(r.id)}
+                      >
+                        Dismiss report
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -691,7 +759,7 @@ export function ChatPanel({
           <DialogHeader>
             <DialogTitle>Message actions</DialogTitle>
             <DialogDescription>
-              Reply, react, or report this message.
+              Reply, react, report, or manage this message.
             </DialogDescription>
           </DialogHeader>
           {actionMessage && (
@@ -748,6 +816,19 @@ export function ChatPanel({
                 }}
               >
                 Ban user
+              </Button>
+            )}
+            {scope === "league" && canDeleteLeagueMessages && actionMessage && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={async () => {
+                  if (!actionMessage) return;
+                  const ok = await deleteLeagueMessage(actionMessage.id);
+                  if (ok) setActionMessage(null);
+                }}
+              >
+                Delete message
               </Button>
             )}
           </DialogFooter>

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { canModerateLeagueChat, type LeagueMemberRole } from "@/lib/chat/permissions";
+import {
+  canDeleteLeagueChatMessages,
+  canModerateLeagueChat,
+  type LeagueMemberRole,
+} from "@/lib/chat/permissions";
 
 async function getClients() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -80,6 +84,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       can_moderate: true,
+      can_delete_messages: canDeleteLeagueChatMessages(role),
       bans: (bans ?? []).map((b) => ({
         ...b,
         banned_display_name: profileByUser.get(b.banned_user_id)?.display_name ?? null,
@@ -103,6 +108,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const leagueId = typeof body.leagueId === "string" ? body.leagueId.trim() : "";
     const bannedUserId = typeof body.bannedUserId === "string" ? body.bannedUserId.trim() : "";
+    const reportId = typeof body.reportId === "string" ? body.reportId.trim() : "";
     const reasonRaw = typeof body.reason === "string" ? body.reason.trim() : "";
 
     if (!leagueId || !bannedUserId) {
@@ -165,7 +171,20 @@ export async function POST(req: Request) {
     const { data, error } = await banQuery;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    return NextResponse.json({ ban: data });
+    let report = null;
+    if (reportId) {
+      const { data: resolvedReport, error: reportError } = await supabase
+        .from("chat_message_reports")
+        .update({ status: "resolved" })
+        .eq("id", reportId)
+        .eq("league_id", leagueId)
+        .select("id,message_id,reporter_user_id,reported_user_id,league_id,scope,reason,message_snapshot,status,created_at")
+        .maybeSingle();
+      if (reportError) return NextResponse.json({ error: reportError.message }, { status: 500 });
+      report = resolvedReport;
+    }
+
+    return NextResponse.json({ ban: data, report });
   } catch (err: unknown) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
