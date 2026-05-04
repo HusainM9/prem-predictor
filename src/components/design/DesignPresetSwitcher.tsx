@@ -40,7 +40,7 @@ export function DesignPresetSwitcher() {
     >
       <SelectTrigger
         size="sm"
-        className="h-8 w-[min(100vw-9rem,11.5rem)] max-sm:h-8 max-sm:px-2 max-sm:text-[11px] sm:w-48"
+        className="h-8 w-28 max-sm:h-8 max-sm:px-2 max-sm:text-[11px] sm:w-32"
         aria-label="Dark mode design preset"
         title="Try different dark themes"
       >

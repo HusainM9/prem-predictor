@@ -68,7 +68,7 @@ export function Navbar() {
     <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="relative mx-auto flex min-h-14 max-w-[1100px] flex-wrap items-center justify-between gap-x-2 gap-y-2 px-3 py-2 sm:h-14 sm:flex-nowrap sm:gap-4 sm:px-4 sm:py-0 md:px-6">
         {/* Logo + Scoreline; on small screens nav sits next to logo */}
-        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1 max-[420px]:min-w-0 max-[420px]:flex-1 md:flex-initial">
+        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1 max-[420px]:min-w-0 max-[420px]:flex-1 xl:flex-initial">
           <Link href="/" className="flex shrink-0 items-center gap-1.5 sm:gap-2" aria-label="Scoreline home">
             {showCustomLogo ? (
               <img
@@ -88,7 +88,7 @@ export function Navbar() {
             </span>
           </Link>
           {/* Next to logo on small; on md+ absolutely centered in the bar */}
-          <nav className="flex min-w-0 flex-nowrap items-center gap-0.5 overflow-x-auto py-1 max-[420px]:gap-0.5 max-[420px]:overflow-x-auto sm:gap-2 sm:overflow-visible md:absolute md:left-1/2 md:top-1/2 md:z-10 md:-translate-x-1/2 md:-translate-y-1/2 md:overflow-visible" aria-label="Main">
+          <nav className="flex min-w-0 flex-nowrap items-center gap-0.5 overflow-x-auto py-1 max-[420px]:gap-0.5 sm:gap-2 xl:absolute xl:left-1/2 xl:top-1/2 xl:z-10 xl:-translate-x-1/2 xl:-translate-y-1/2 xl:overflow-visible" aria-label="Main">
             {navLinks
               .filter((link) => !link.private || userEmail)
               .map(({ href, label }) => (

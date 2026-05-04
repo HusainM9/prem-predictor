@@ -38,7 +38,7 @@ export function ScoringInfo({ className }: { className?: string }) {
         </li>
       </ol>
       <p className="mt-2 text-xs text-muted-foreground">
-        Odds are locked when the match kicks off. Stake is 10 pts per prediction.
+        Odds are locked 24 hours before kick-off. Stake is 10 pts per prediction.
       </p>
     </section>
   );

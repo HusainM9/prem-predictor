@@ -5,8 +5,8 @@ export type DesignPreset = "emerald" | "aurora";
 export const DEFAULT_DESIGN_PRESET: DesignPreset = "aurora";
 
 export const DESIGN_PRESET_OPTIONS: { value: DesignPreset; label: string; hint: string }[] = [
-  { value: "aurora", label: "Aurora mesh", hint: "CSS-only animated colour wash" },
-  { value: "emerald", label: "Emerald pitch", hint: "Original green-on-charcoal" },
+  { value: "aurora", label: "Aurora", hint: "CSS-only animated colour wash" },
+  { value: "emerald", label: "Emerald", hint: "Original green-on-charcoal" },
 ];
 
 export function isDesignPreset(value: string | null): value is DesignPreset {
