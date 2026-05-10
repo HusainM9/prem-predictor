@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/odds",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/score-bonuses",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-chat-messages",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}

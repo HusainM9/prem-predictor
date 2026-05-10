@@ -1,0 +1,678 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { Info } from "lucide-react";
+import { supabase } from "@/lib/supabase/client";
+import { ScoringInfo } from "@/components/ScoringInfo";
+import { VoteForMatchOfTheWeek } from "@/components/VoteForMatchOfTheWeek";
+import { PlayMatchCard, type PlayFixtureRow, type PredictionMeta } from "@/components/play/PlayMatchCard";
+
+type Pick = "H" | "D" | "A";
+
+function formatKickoff(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleString("en-GB", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+}
+
+function kickoffGroupKey(iso: string): string {
+  return formatKickoff(iso);
+}
+
+/** List upcoming fixtures for the next gameweek and any fixtures added to the play page. */
+export default function PlayPage() {
+  const [fixtures, setFixtures] = useState<PlayFixtureRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [gw, setGw] = useState<number | null>(null);
+
+  const [homeGoals, setHomeGoals] = useState<Record<string, string>>({});
+  const [awayGoals, setAwayGoals] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
+  const [msg, setMsg] = useState<Record<string, string>>({});
+  const [alreadySavedFixtureIds, setAlreadySavedFixtureIds] = useState<Set<string>>(new Set());
+  /** Last saved score per fixture to show orange when current input differs. */
+  const [lastSavedScores, setLastSavedScores] = useState<Record<string, { h: number; a: number }>>({});
+  const [now, setNow] = useState(() => Date.now());
+  const [predictionMeta, setPredictionMeta] = useState<Record<string, PredictionMeta>>({});
+  const autoSavedLockRef = useRef<Set<string>>(new Set());
+  const fixtureCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  /** Fixture id that won the last game-of-the-week vote . */
+  const [matchOfTheWeekFixtureId, setMatchOfTheWeekFixtureId] = useState<string | null>(null);
+  const [showFinishedMatches, setShowFinishedMatches] = useState(false);
+
+  /** Convert predicted score to outcome. H = home win, A = away win, D = draw. */
+  function derivedPick(hg: number, ag: number): Pick | null {
+    if (hg > ag) return "H";
+    if (ag > hg) return "A";
+    return "D";
+  }
+
+  const totalFixtures = fixtures.length;
+  const submittedCount = useMemo(
+    () => fixtures.filter((f) => alreadySavedFixtureIds.has(f.id)).length,
+    [fixtures, alreadySavedFixtureIds]
+  );
+
+  const setFixtureCardRef = useCallback((fixtureId: string, node: HTMLDivElement | null) => {
+    fixtureCardRefs.current[fixtureId] = node;
+  }, []);
+
+  /** Group fixtures by kickoff label in kickoff order. */
+  const groupFixtures = useCallback((list: PlayFixtureRow[]) => {
+    const map = new Map<string, PlayFixtureRow[]>();
+    for (const f of list) {
+      const key = kickoffGroupKey(f.kickoff_time);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(f);
+    }
+    const entries = Array.from(map.entries());
+    entries.sort(([, listA], [, listB]) => {
+      const timeA = listA[0]?.kickoff_time ?? "";
+      const timeB = listB[0]?.kickoff_time ?? "";
+      return timeA.localeCompare(timeB);
+    });
+    return entries.map(([label, list]) => {
+      const sorted = [...list].sort((a, b) => a.kickoff_time.localeCompare(b.kickoff_time));
+      return [label, sorted] as [string, PlayFixtureRow[]];
+    });
+  }, []);
+
+  /** Fixtures split into active vs finished, each grouped by kickoff. */
+  const { activeGroups, finishedGroups, finishedCount } = useMemo(() => {
+    const active: PlayFixtureRow[] = [];
+    const finished: PlayFixtureRow[] = [];
+    for (const f of fixtures) {
+      const statusLower = (f.status ?? "").toLowerCase();
+      if (statusLower === "finished") finished.push(f);
+      else active.push(f);
+    }
+    return {
+      activeGroups: groupFixtures(active),
+      finishedGroups: groupFixtures(finished),
+      finishedCount: finished.length,
+    };
+  }, [fixtures, groupFixtures]);
+
+  /** Countdown to next upcoming kickoff in this list */
+  const countdown = useMemo(() => {
+    if (fixtures.length === 0) return null;
+    const upcoming = fixtures.find((f) => new Date(f.kickoff_time).getTime() > now);
+    if (!upcoming) return null;
+    const t = new Date(upcoming.kickoff_time).getTime();
+    const diff = Math.max(0, t - now);
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }, [fixtures, now]);
+
+  const nextKickoffLabel = useMemo(() => {
+    const upcoming = fixtures.find((f) => new Date(f.kickoff_time).getTime() > now);
+    if (!upcoming) return null;
+    return formatKickoff(upcoming.kickoff_time);
+  }, [fixtures, now]);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      setErr(null);
+
+      const nowIso = new Date().toISOString();
+      const sessionPromise = supabase.auth.getSession();
+
+      const { data: gwRow, error: gwErr } = await supabase
+        .from("fixtures")
+        .select("gameweek")
+        .eq("season", "2025/26")
+        .eq("status", "scheduled")
+        .gte("kickoff_time", nowIso)
+        .or("include_on_play_page.is.null,include_on_play_page.eq.false")
+        .order("kickoff_time", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (gwErr) {
+        setErr(gwErr.message);
+        setFixtures([]);
+        setLoading(false);
+        return;
+      }
+
+      const nextGw = gwRow?.gameweek ?? 1;
+      setGw(nextGw);
+
+      const selectCols =
+        "id,kickoff_time,home_team,away_team,status,gameweek,home_goals,away_goals,odds_home,odds_draw,odds_away,odds_locked_at,odds_home_current,odds_draw_current,odds_away_current,odds_current_updated_at,odds_current_bookmaker";
+
+      const { data: gwFx, error: gwErr2 } = await supabase
+        .from("fixtures")
+        .select(selectCols)
+        .eq("season", "2025/26")
+        .eq("gameweek", nextGw)
+        .order("kickoff_time", { ascending: true });
+
+      if (gwErr2) {
+        setErr(gwErr2.message);
+        setFixtures([]);
+        setLoading(false);
+        return;
+      }
+
+      const gwList = ((gwFx ?? []) as PlayFixtureRow[]).slice();
+      gwList.sort((a, b) => a.kickoff_time.localeCompare(b.kickoff_time));
+
+      let extraList: PlayFixtureRow[] = [];
+      const { data: extraFx } = await supabase
+        .from("fixtures")
+        .select(selectCols)
+        .eq("season", "2025/26")
+        .eq("gameweek", nextGw)
+        .eq("include_on_play_page", true)
+        .order("kickoff_time", { ascending: true });
+      if (extraFx) extraList = (extraFx as PlayFixtureRow[]).slice();
+
+      const seen = new Set(gwList.map((f) => f.id));
+      const combined = [...gwList];
+      for (const f of extraList) {
+        if (!seen.has(f.id)) {
+          seen.add(f.id);
+          combined.push(f);
+        }
+      }
+      combined.sort((a, b) => a.kickoff_time.localeCompare(b.kickoff_time));
+      let combinedWithForm = combined;
+      if (combined.length > 0) {
+        const fixtureIds = combined.map((f) => f.id).join(",");
+        try {
+          const formRes = await fetch(
+            `/api/matches/form?fixtureIds=${encodeURIComponent(fixtureIds)}`
+          );
+          const formData = await formRes.json().catch(() => ({}));
+          if (formRes.ok && formData.forms && typeof formData.forms === "object") {
+            const forms = formData.forms as Record<string, PlayFixtureRow["form"]>;
+            combinedWithForm = combined.map((f) => ({
+              ...f,
+              form: forms[f.id] ?? f.form,
+            }));
+          }
+        } catch {
+        }
+      }
+      setFixtures(combinedWithForm);
+      setLoading(false);
+
+      const { data: { session } } = await sessionPromise;
+      if (session?.access_token && combinedWithForm.length > 0) {
+        const fixtureIds = combinedWithForm.map((f) => f.id).join(",");
+        try {
+          const res = await fetch(
+            `/api/predictions/for-fixtures?fixtureIds=${encodeURIComponent(fixtureIds)}`,
+            { headers: { Authorization: `Bearer ${session.access_token}` } }
+          );
+          const data = await res.json();
+          if (res.ok && Array.isArray(data.predictions)) {
+            const home: Record<string, string> = {};
+            const away: Record<string, string> = {};
+            const savedIds = new Set<string>();
+            const savedScores: Record<string, { h: number; a: number }> = {};
+            const meta: Record<string, PredictionMeta> = {};
+            for (const p of data.predictions) {
+              if (p.fixture_id != null && (p.pred_home_goals != null || p.pred_away_goals != null)) {
+                const h = Number(p.pred_home_goals ?? 0);
+                const a = Number(p.pred_away_goals ?? 0);
+                home[p.fixture_id] = String(p.pred_home_goals ?? "");
+                away[p.fixture_id] = String(p.pred_away_goals ?? "");
+                savedIds.add(p.fixture_id);
+                savedScores[p.fixture_id] = { h, a };
+              }
+              if (p.fixture_id != null) {
+                meta[p.fixture_id] = {
+                  points_awarded: Number(p.points_awarded ?? 0),
+                  bonus_exact_score_points: Number(p.bonus_exact_score_points ?? 0),
+                  settled_at: typeof p.settled_at === "string" ? p.settled_at : null,
+                };
+              }
+            }
+            if (Object.keys(home).length > 0) setHomeGoals((prev) => ({ ...prev, ...home }));
+            if (Object.keys(away).length > 0) setAwayGoals((prev) => ({ ...prev, ...away }));
+            if (savedIds.size > 0) setAlreadySavedFixtureIds(savedIds);
+            if (Object.keys(savedScores).length > 0) setLastSavedScores((prev) => ({ ...prev, ...savedScores }));
+            if (Object.keys(meta).length > 0) setPredictionMeta((prev) => ({ ...prev, ...meta }));
+          }
+        } catch {
+        }
+      }
+    }
+
+    load();
+  }, []);
+
+  function parseGoal(s: string | undefined): number {
+    const t = (s ?? "").trim();
+    return t === "" ? 0 : Number(t);
+  }
+
+  const validate = useCallback((fixtureId: string) => {
+    const hg = parseGoal(homeGoals[fixtureId]);
+    const ag = parseGoal(awayGoals[fixtureId]);
+    if (!Number.isInteger(hg) || hg < 0) return "Home goals must be 0 or more.";
+    if (!Number.isInteger(ag) || ag < 0) return "Away goals must be 0 or more.";
+    return null;
+  }, [homeGoals, awayGoals]);
+
+  const savePrediction = useCallback(
+    async (fixture: PlayFixtureRow) => {
+      setMsg((m) => ({ ...m, [fixture.id]: "" }));
+      const validation = validate(fixture.id);
+      if (validation) {
+        autoSavedLockRef.current.delete(fixture.id);
+        setMsg((m) => ({ ...m, [fixture.id]: validation }));
+        return;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setMsg((m) => ({ ...m, [fixture.id]: "Log in to submit predictions." }));
+        return;
+      }
+
+      setSaving((s) => ({ ...s, [fixture.id]: true }));
+
+      const hg = parseGoal(homeGoals[fixture.id]);
+      const ag = parseGoal(awayGoals[fixture.id]);
+      const p = derivedPick(hg, ag)!;
+
+      try {
+        const res = await fetch("/api/predictions/submit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            fixtureId: fixture.id,
+            pick: p,
+            predHomeGoals: hg,
+            predAwayGoals: ag,
+            leagueId: null,
+          }),
+        });
+
+        const json = await res.json();
+
+        if (!res.ok) {
+          setMsg((m) => ({ ...m, [fixture.id]: `Error: ${json.error ?? "Failed"}` }));
+          autoSavedLockRef.current.delete(fixture.id);
+        } else {
+          setMsg((m) => ({ ...m, [fixture.id]: "Saved" }));
+          setAlreadySavedFixtureIds((prev) => new Set(prev).add(fixture.id));
+          setLastSavedScores((prev) => ({ ...prev, [fixture.id]: { h: hg, a: ag } }));
+        }
+      } catch (e: unknown) {
+        autoSavedLockRef.current.delete(fixture.id);
+        setMsg((m) => ({ ...m, [fixture.id]: `Error: ${String(e instanceof Error ? e.message : e)}` }));
+      }
+
+      setSaving((s) => ({ ...s, [fixture.id]: false }));
+    },
+    [homeGoals, awayGoals, validate]
+  );
+
+  /** When odds lock with a valid unsaved line, persist once so the prediction is stored. */
+  useEffect(() => {
+    if (fixtures.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      for (const f of fixtures) {
+        if (cancelled) return;
+        if (!f.odds_locked_at) continue;
+        if (alreadySavedFixtureIds.has(f.id)) continue;
+        if (autoSavedLockRef.current.has(f.id)) continue;
+        const hgStr = homeGoals[f.id];
+        const agStr = awayGoals[f.id];
+        const hasInput =
+          (hgStr ?? "").trim() !== "" && (agStr ?? "").trim() !== "";
+        if (!hasInput) continue;
+        const hg = parseGoal(hgStr);
+        const ag = parseGoal(agStr);
+        if (
+          !Number.isInteger(hg) ||
+          hg < 0 ||
+          !Number.isInteger(ag) ||
+          ag < 0
+        ) {
+          continue;
+        }
+        autoSavedLockRef.current.add(f.id);
+        await savePrediction(f);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fixtures, alreadySavedFixtureIds, homeGoals, awayGoals, savePrediction]);
+
+  function isFixtureEditable(f: PlayFixtureRow, nowMs: number = Date.now()): boolean {
+    const statusLower = (f.status ?? "").toLowerCase();
+    const kickoffPassed = new Date(f.kickoff_time).getTime() <= nowMs;
+    return statusLower === "scheduled" && !kickoffPassed;
+  }
+
+  const nextPredictionFixtureId = useMemo(() => {
+    const nextUnsaved = fixtures.find(
+      (f) => isFixtureEditable(f, now) && !alreadySavedFixtureIds.has(f.id)
+    );
+    if (nextUnsaved) return nextUnsaved.id;
+    return fixtures.find((f) => isFixtureEditable(f, now))?.id ?? null;
+  }, [fixtures, alreadySavedFixtureIds, now]);
+
+  const jumpToNextPrediction = useCallback(() => {
+    if (!nextPredictionFixtureId) return;
+    const node = fixtureCardRefs.current[nextPredictionFixtureId];
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [nextPredictionFixtureId]);
+
+  async function saveAll() {
+    for (const f of fixtures) {
+      if (!isFixtureEditable(f, now)) continue;
+      const hgStr = homeGoals[f.id];
+      const agStr = awayGoals[f.id];
+      const hasInput = (hgStr ?? "") !== "" || (agStr ?? "") !== "";
+      if (!hasInput || alreadySavedFixtureIds.has(f.id)) continue;
+      if (validate(f.id)) continue;
+      await savePrediction(f);
+    }
+  }
+
+  const hasUnsaved = fixtures.some((f) => {
+    if (!isFixtureEditable(f, now)) return false;
+    const hg = (homeGoals[f.id] ?? "").trim();
+    const ag = (awayGoals[f.id] ?? "").trim();
+    return hg !== "" && ag !== "" && !alreadySavedFixtureIds.has(f.id);
+  });
+
+  const [scoringInfoPinned, setScoringInfoPinned] = useState(false);
+  const [scoringInfoHover, setScoringInfoHover] = useState(false);
+  const scoringInfoVisible = scoringInfoPinned || scoringInfoHover;
+  const hoverLeaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearHoverLeave = () => {
+    if (hoverLeaveRef.current) {
+      clearTimeout(hoverLeaveRef.current);
+      hoverLeaveRef.current = null;
+    }
+  };
+  const scheduleHoverLeave = () => {
+    clearHoverLeave();
+    hoverLeaveRef.current = setTimeout(() => setScoringInfoHover(false), 150);
+  };
+  useEffect(() => () => clearHoverLeave(), []);
+
+  return (
+    <main className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-4xl px-3 py-4 pb-8 max-sm:px-3 max-sm:py-4 max-sm:pb-8 sm:px-4 sm:py-6 sm:pb-10 md:px-6">
+        <div className="mb-4">
+          <Link
+            href="/"
+            className="inline-flex min-h-[44px] touch-manipulation items-center text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            ← Dashboard
+          </Link>
+        </div>
+
+        <section className="mb-6 overflow-hidden rounded-2xl border border-border/70 bg-card/80 p-4 shadow-2xl shadow-primary/5 ring-1 ring-primary/10 backdrop-blur sm:mb-8 sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="mb-2 inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                Matchday Hub
+              </div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-black tracking-tight text-foreground max-sm:text-2xl sm:text-3xl md:text-4xl">
+                  {gw != null ? `GW${gw}` : "…"} Predictions
+                </h1>
+                <button
+                  type="button"
+                  onClick={() => setScoringInfoPinned((p) => !p)}
+                  onMouseEnter={() => { clearHoverLeave(); setScoringInfoHover(true); }}
+                  onMouseLeave={scheduleHoverLeave}
+                  className="shrink-0 rounded-full border border-border/70 bg-background/60 p-2 text-muted-foreground shadow-sm transition hover:border-primary/40 hover:bg-primary/10 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background"
+                  aria-label="How scoring works"
+                  title="How scoring works"
+                >
+                  <Info className="size-5" />
+                </button>
+              </div>
+              <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+                Lock in every scoreline before kickoff and track your matchday progress.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 lg:min-w-[380px]">
+              <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-3 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Submitted
+                </p>
+                <p className="mt-1 text-xl font-bold text-foreground">
+                  {totalFixtures > 0 ? `${submittedCount}/${totalFixtures}` : "—"}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-3 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Countdown
+                </p>
+                <p className="mt-1 font-mono text-lg font-bold text-primary">
+                  {countdown ?? "—"}
+                </p>
+              </div>
+              <div className="col-span-2 rounded-xl border border-border/70 bg-background/55 px-3 py-3 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Next Kickoff
+                </p>
+                <p className="mt-1 text-sm font-semibold leading-snug text-foreground">
+                  {nextKickoffLabel ?? "Complete"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {totalFixtures > 0 && (
+            <div className="mt-5">
+              <div
+                className="h-2 overflow-hidden rounded-full bg-muted/70"
+                role="progressbar"
+                aria-valuenow={submittedCount}
+                aria-valuemin={0}
+                aria-valuemax={totalFixtures}
+              >
+                <div
+                  className="h-full rounded-full bg-primary shadow-[0_0_18px_var(--primary)] transition-all duration-500 motion-reduce:transition-none"
+                  style={{
+                    width: `${totalFixtures ? (100 * submittedCount) / totalFixtures : 0}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {scoringInfoVisible && (
+            <div
+              className="mt-4 w-full"
+              onMouseEnter={() => { clearHoverLeave(); setScoringInfoHover(true); }}
+              onMouseLeave={scheduleHoverLeave}
+            >
+              <ScoringInfo />
+            </div>
+          )}
+        </section>
+
+        {!loading && !err && (
+          <div className="mb-6">
+            <VoteForMatchOfTheWeek
+              variant="full"
+              onLastWinnerChange={setMatchOfTheWeekFixtureId}
+            />
+          </div>
+        )}
+
+        {loading && <p className="text-muted-foreground">Loading fixtures…</p>}
+        {err && <p className="text-destructive">Error: {err}</p>}
+
+        {!loading && !err && fixtures.length === 0 && (
+          <p className="text-muted-foreground">No fixtures for this gameweek.</p>
+        )}
+
+        {!loading && !err && fixtures.length > 0 && (
+          <div className="space-y-8">
+            {activeGroups.map(([groupLabel, groupFixtures]) => {
+              const blockSubmitted = groupFixtures.filter((f) => alreadySavedFixtureIds.has(f.id)).length;
+              const blockTotal = groupFixtures.length;
+              return (
+                <section key={groupLabel}>
+                  <div className="mb-3 flex items-center justify-between rounded-full border border-border/60 bg-card/50 px-3 py-2">
+                    <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      {groupLabel}
+                    </h2>
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                      {blockSubmitted}/{blockTotal}
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    {groupFixtures.map((f) => (
+                      <div key={f.id} ref={(node) => setFixtureCardRef(f.id, node)}>
+                        <PlayMatchCard
+                          f={f}
+                          nowMs={now}
+                          homeGoals={homeGoals}
+                          awayGoals={awayGoals}
+                          setHomeGoals={setHomeGoals}
+                          setAwayGoals={setAwayGoals}
+                          saving={saving}
+                          msg={msg}
+                          savePrediction={savePrediction}
+                          alreadySavedFixtureIds={alreadySavedFixtureIds}
+                          lastSavedScores={lastSavedScores}
+                          matchOfTheWeekFixtureId={matchOfTheWeekFixtureId}
+                          meta={predictionMeta[f.id]}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+
+            {finishedCount > 0 && (
+              <section className="rounded-2xl border border-border/70 bg-card/40 p-4">
+                <button
+                  type="button"
+                  onClick={() => setShowFinishedMatches((prev) => !prev)}
+                  className="inline-flex min-h-[40px] items-center gap-2 rounded-full border border-border/60 bg-background/45 px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:border-primary/30 hover:text-foreground"
+                >
+                  <span aria-hidden>{showFinishedMatches ? "▾" : "▸"}</span>
+                  Finished matches ({finishedCount})
+                </button>
+                {showFinishedMatches && (
+                  <div className="mt-4 space-y-6">
+                    {finishedGroups.map(([groupLabel, groupFixtures]) => (
+                      <section key={`finished-${groupLabel}`}>
+                        <div className="mb-3 rounded-full border border-border/60 bg-background/45 px-3 py-2">
+                          <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                            {groupLabel}
+                          </h2>
+                        </div>
+                        <div className="space-y-3">
+                          {groupFixtures.map((f) => (
+                            <div key={f.id} ref={(node) => setFixtureCardRef(f.id, node)}>
+                              <PlayMatchCard
+                                f={f}
+                                nowMs={now}
+                                homeGoals={homeGoals}
+                                awayGoals={awayGoals}
+                                setHomeGoals={setHomeGoals}
+                                setAwayGoals={setAwayGoals}
+                                saving={saving}
+                                msg={msg}
+                                savePrediction={savePrediction}
+                                alreadySavedFixtureIds={alreadySavedFixtureIds}
+                                lastSavedScores={lastSavedScores}
+                                matchOfTheWeekFixtureId={matchOfTheWeekFixtureId}
+                                meta={predictionMeta[f.id]}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+          </div>
+        )}
+
+        {/* Footer progress + Save All */}
+        {!loading && !err && totalFixtures > 0 && (
+          <footer className="mt-8 rounded-2xl border border-border/70 bg-card/60 p-4 shadow-lg shadow-black/10">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-muted-foreground">
+                  {submittedCount} of {totalFixtures} submitted
+                </span>
+                <div
+                  className="h-2 w-28 overflow-hidden rounded-full bg-muted"
+                  role="progressbar"
+                  aria-valuenow={submittedCount}
+                  aria-valuemin={0}
+                  aria-valuemax={totalFixtures}
+                >
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-500 motion-reduce:transition-none"
+                    style={{
+                      width: `${totalFixtures ? (100 * submittedCount) / totalFixtures : 0}%`,
+                    }}
+                  />
+                </div>
+              </div>
+              {hasUnsaved && (
+                <button
+                  type="button"
+                  onClick={saveAll}
+                  className="min-h-[44px] touch-manipulation rounded-xl bg-primary px-5 py-2 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20 transition hover:-translate-y-0.5 hover:opacity-95 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+                >
+                  Save All
+                </button>
+              )}
+            </div>
+          </footer>
+        )}
+      </div>
+      {!loading && !err && nextPredictionFixtureId && (
+        <button
+          type="button"
+          onClick={jumpToNextPrediction}
+          className="fixed right-3 top-20 z-50 inline-flex min-h-[40px] items-center gap-1 rounded-full border border-primary/40 bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background sm:right-4 sm:top-24 sm:min-h-[44px] sm:gap-1.5 sm:px-4 sm:text-sm md:right-6 md:top-6"
+          aria-label="Jump to next prediction"
+        >
+          <span aria-hidden>↓</span>
+          <span className="hidden sm:inline">Next prediction</span>
+          <span className="sm:hidden">Next</span>
+        </button>
+      )}
+    </main>
+  );
+}

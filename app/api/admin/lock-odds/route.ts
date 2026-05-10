@@ -1,0 +1,238 @@
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { requireAdmin } from "@/lib/admin/requireAdmin";
+
+// Currently only getting Unibet
+const PREFERRED_BOOKMAKERS = ["bet365", "skybet"];
+
+interface OddsOutcome {
+  name?: string;
+  price?: number;
+}
+interface OddsMarket {
+  key?: string;
+  outcomes?: OddsOutcome[];
+}
+interface OddsBookmaker {
+  key?: string;
+  title?: string;
+  markets?: OddsMarket[];
+}
+interface OddsEvent {
+  id?: string;
+  home_team?: string;
+  away_team?: string;
+  bookmakers?: OddsBookmaker[];
+}
+
+function pickPreferredBookmaker(bookmakers: OddsBookmaker[]): OddsBookmaker | null {
+  if (!Array.isArray(bookmakers) || bookmakers.length === 0) return null;
+  for (const pref of PREFERRED_BOOKMAKERS) {
+    const found = bookmakers.find((b) => String(b?.key).toLowerCase() === pref);
+    if (found) return found;
+  }
+  return bookmakers[0];
+}
+
+function getH2HOdds(event: OddsEvent, bookmaker: OddsBookmaker) {
+  const h2h = bookmaker?.markets?.find((m) => m.key === "h2h");
+  const outcomes = h2h?.outcomes ?? [];
+
+  const homePrice = outcomes.find((o) => o.name === event.home_team)?.price;
+  const awayPrice = outcomes.find((o) => o.name === event.away_team)?.price;
+  const drawPrice = outcomes.find((o) => String(o.name).toLowerCase() === "draw")?.price;
+
+  if (homePrice == null || awayPrice == null || drawPrice == null) return null;
+
+  return {
+    home: Number(homePrice),
+    draw: Number(drawPrice),
+    away: Number(awayPrice),
+  };
+}
+
+/** Used when snapshotting fixture odds onto predictions. Pick H/D/A → home/draw/away odds. */
+export function getLockedOddsForPick(
+  pick: string,
+  odds: { home: number; draw: number; away: number }
+): number {
+  return pick === "H" ? odds.home : pick === "D" ? odds.draw : odds.away;
+}
+
+export async function GET(req: Request) {
+  const unauthorized = requireAdmin(req);
+  if (unauthorized) return unauthorized;
+  try {
+    const apiKey = process.env.ODDS_API_KEY;
+    const region = process.env.ODDS_API_REGION || "uk";
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+
+    if (!apiKey) return NextResponse.json({ error: "Missing ODDS_API_KEY" }, { status: 500 });
+    if (!serviceKey) return NextResponse.json({ error: "Missing SUPABASE_SERVICE_ROLE_KEY" }, { status: 500 });
+
+    const supabase = createClient(supabaseUrl, serviceKey);
+
+    // Test the 24h lock window without waiting.
+    const { searchParams } = new URL(req.url);
+    const nowParam = searchParams.get("now");
+    const fixtureIdParam = searchParams.get("fixtureId")?.trim() || null;
+    const now = nowParam ? new Date(nowParam) : new Date();
+    const lockFrom = new Date(now.getTime() + 60 * 1000);
+    const lockTo = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+    const fixtureSelect =
+      "id,odds_api_event_id,home_team,away_team,kickoff_time,odds_locked_at,odds_home,odds_draw,odds_away,odds_home_current,odds_draw_current,odds_away_current";
+    type FixtureRow = {
+      id: string;
+      odds_api_event_id: string | null;
+      home_team: string;
+      away_team: string;
+      kickoff_time: string;
+      odds_locked_at: string | null;
+      odds_home: number | null;
+      odds_draw: number | null;
+      odds_away: number | null;
+      odds_home_current: number | null;
+      odds_draw_current: number | null;
+      odds_away_current: number | null;
+    };
+    let fixtures: FixtureRow[];
+
+    if (fixtureIdParam) {
+      const { data, error } = await supabase
+        .from("fixtures")
+        .select(fixtureSelect)
+        .eq("id", fixtureIdParam)
+        .maybeSingle();
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      fixtures = data ? [data] : [];
+    } else {
+      const { data, error } = await supabase
+        .from("fixtures")
+        .select(fixtureSelect)
+        .gte("kickoff_time", lockFrom.toISOString())
+        .lte("kickoff_time", lockTo.toISOString())
+        .is("odds_locked_at", null)
+        .not("odds_api_event_id", "is", null);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      fixtures = data ?? [];
+    }
+
+    if (!fixtures || fixtures.length === 0) {
+      return NextResponse.json({
+        success: true,
+        fixtures_considered: 0,
+        odds_locked: 0,
+        predictions_snapshotted: 0,
+        note: fixtureIdParam
+          ? `Fixture ${fixtureIdParam} not found or not in lock window.`
+          : "No fixtures kicking off in the next 24h.",
+        ...(fixtureIdParam ? {} : { window: { lockFrom: lockFrom.toISOString(), lockTo: lockTo.toISOString() } }),
+      });
+    }
+
+    // Fetch all current EPL odds once
+    const url =
+      `https://api.the-odds-api.com/v4/sports/soccer_epl/odds` +
+      `?regions=${region}&markets=h2h&oddsFormat=decimal&apiKey=${apiKey}`;
+
+    const res = await fetch(url, { cache: "no-store" });
+    const text = await res.text();
+
+    if (!res.ok) {
+      return NextResponse.json({ error: "Odds API request failed", status: res.status, body: text }, { status: 500 });
+    }
+
+    const events = JSON.parse(text) as OddsEvent[];
+
+    let locked = 0;
+    let snap = 0;
+
+    for (const f of fixtures) {
+      const event = events.find((e) => e.id === f.odds_api_event_id);
+
+      // Prefer locking from the live event odds (best), else fallback to current odds if present
+      let oddsToLock: { home: number; draw: number; away: number } | null = null;
+      let bookTitle: string | null = null;
+
+      if (event) {
+        const bookmaker = pickPreferredBookmaker(event.bookmakers ?? []);
+        if (bookmaker) {
+          const odds = getH2HOdds(event, bookmaker);
+          if (odds) {
+            oddsToLock = odds;
+            bookTitle = bookmaker.title ?? bookmaker.key ?? null;
+          }
+        }
+      }
+
+      // Fallback: use fixture locked odds or current odds if Odds API event missing
+      if (!oddsToLock) {
+        const home = f.odds_home ?? f.odds_home_current;
+        const draw = f.odds_draw ?? f.odds_draw_current;
+        const away = f.odds_away ?? f.odds_away_current;
+        if (home != null && draw != null && away != null) {
+          oddsToLock = {
+            home: Number(home),
+            draw: Number(draw),
+            away: Number(away),
+          };
+          bookTitle = null;
+        }
+      }
+
+      if (!oddsToLock) continue;
+
+      // Lock odds on fixture
+      const { error: updErr } = await supabase
+        .from("fixtures")
+        .update({
+          odds_home: oddsToLock.home,
+          odds_draw: oddsToLock.draw,
+          odds_away: oddsToLock.away,
+          odds_bookmaker: bookTitle,
+          odds_locked_at: new Date().toISOString(),
+        })
+        .eq("id", f.id);
+
+      if (updErr) continue;
+      locked++;
+
+      // Snapshot locked odds onto predictions for this fixture (only if not already set)
+      const { data: preds, error: predErr } = await supabase
+        .from("predictions")
+        .select("id,pick,locked_odds")
+        .eq("fixture_id", f.id);
+
+      if (predErr || !preds) continue;
+
+      for (const p of preds) {
+        if (p.locked_odds != null) continue;
+
+        const lo = getLockedOddsForPick(p.pick, oddsToLock);
+
+        const { error: pUpdErr } = await supabase
+          .from("predictions")
+          .update({ locked_odds: lo })
+          .eq("id", p.id);
+
+        if (!pUpdErr) snap++;
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      fixtures_considered: fixtures.length,
+      odds_locked: locked,
+      predictions_snapshotted: snap,
+      bookmaker_preference: ["bet365", "skybet"],
+      ...(fixtureIdParam ? {} : { window: { lockFrom: lockFrom.toISOString(), lockTo: lockTo.toISOString() } }),
+    });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { error: "Route crashed", message: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
+  }
+}

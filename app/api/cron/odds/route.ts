@@ -1,0 +1,93 @@
+import { NextResponse } from "next/server";
+
+export async function GET(req: Request) {
+  const authHeader = req.headers.get("authorization");
+  const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const querySecret = new URL(req.url).searchParams.get("secret");
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!cronSecret) {
+    return NextResponse.json(
+      { error: "CRON_SECRET is not set" },
+      { status: 500 }
+    );
+  }
+
+  if (bearer !== cronSecret && querySecret !== cronSecret) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const adminSecret = process.env.ADMIN_SECRET?.trim();
+  if (!adminSecret) {
+    return NextResponse.json(
+      { error: "ADMIN_SECRET is not set" },
+      { status: 500 }
+    );
+  }
+
+  // Use same host that invoked this endpoint.
+  const baseUrl = new URL(req.url).origin;
+
+  const results: { step: string; ok: boolean; status: number; body?: unknown }[] = [];
+
+  try {
+    // Map new fixtures to Odds API events
+    const mapRes = await fetch(`${baseUrl}/api/admin/map-odds`, {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${adminSecret}` },
+    });
+    const mapBody = await mapRes.json().catch(() => ({}));
+    results.push({
+      step: "map-odds",
+      ok: mapRes.ok,
+      status: mapRes.status,
+      body: mapBody,
+    });
+
+    // Fetch current odds for upcoming fixtures
+    const fetchRes = await fetch(`${baseUrl}/api/odds/fetch-current`, {
+      method: "POST",
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${adminSecret}` },
+    });
+    const fetchBody = await fetchRes.json().catch(() => ({}));
+    results.push({
+      step: "fetch-current",
+      ok: fetchRes.ok,
+      status: fetchRes.status,
+      body: fetchBody,
+    });
+
+    // Lock odds for fixtures in the next 24h
+    const lockRes = await fetch(`${baseUrl}/api/admin/lock-odds`, {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${adminSecret}` },
+    });
+    const lockBody = await lockRes.json().catch(() => ({}));
+    results.push({
+      step: "lock-odds",
+      ok: lockRes.ok,
+      status: lockRes.status,
+      body: lockBody,
+    });
+
+    // 207 if any step failed but we have partial results 
+    const allOk = results.every((r) => r.ok);
+    return NextResponse.json(
+      {
+        success: allOk,
+        results,
+      },
+      { status: allOk ? 200 : 207 }
+    );
+  } catch (err: unknown) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+        results,
+      },
+      { status: 500 }
+    );
+  }
+}
